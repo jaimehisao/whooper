@@ -16,6 +16,7 @@ import (
 
 type DashboardModel struct {
 	db             *store.DB
+	width          int
 	recoveryScore  float64
 	hrvValue       float64
 	rhrValue       float64
@@ -24,22 +25,26 @@ type DashboardModel struct {
 	dayStrain      float64
 	sparklineData  []float64
 	recentWorkouts []models.Workout
+	alerts         []string
 	loaded         bool
+	err            string
 }
 
 func NewDashboard(db *store.DB) DashboardModel {
-	return DashboardModel{db: db}
+	return DashboardModel{db: db, width: 80}
 }
 
 type dashboardDataMsg struct {
-	recovery      float64
-	hrv           float64
-	rhr           float64
-	sleepHours    float64
-	sleepEff      float64
-	strain        float64
-	sparkline     []float64
-	workouts      []models.Workout
+	recovery  float64
+	hrv       float64
+	rhr       float64
+	sleepHrs  float64
+	sleepEff  float64
+	strain    float64
+	sparkline []float64
+	workouts  []models.Workout
+	alerts    []string
+	err       string
 }
 
 func (m *DashboardModel) Init() tea.Cmd {
@@ -54,36 +59,60 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 		weekAgo := now.Add(-7 * 24 * time.Hour).Format("2006-01-02")
 
 		msg := dashboardDataMsg{}
+		var errs []string
 
-		recoveries, _ := db.GetRecoveryTrend(today, "")
-		if len(recoveries) > 0 {
+		recoveries, err := db.GetRecoveryTrend(today, "")
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("recovery: %v", err))
+		} else if len(recoveries) > 0 {
 			msg.recovery = recoveries[0].RecoveryScore
 			msg.hrv = recoveries[0].HRV
 			msg.rhr = recoveries[0].RHR
 		}
 
-		sleeps, _ := db.GetSleepTrend(today, "")
-		if len(sleeps) > 0 {
-			msg.sleepHours = float64(sleeps[0].DurationMilli) / 3600000.0
+		sleeps, err := db.GetSleepTrend(today, "")
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("sleep: %v", err))
+		} else if len(sleeps) > 0 {
+			msg.sleepHrs = float64(sleeps[0].DurationMilli) / 3600000.0
 			msg.sleepEff = sleeps[0].EfficiencyPct
 		}
 
-		strains, _ := db.GetStrainTrend(today, "")
-		if len(strains) > 0 {
+		strains, err := db.GetStrainTrend(today, "")
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("strain: %v", err))
+		} else if len(strains) > 0 {
 			msg.strain = strains[0].Strain
 		}
 
-		weekRecoveries, _ := db.GetRecoveryTrend(weekAgo, "")
+		weekRecoveries, err := db.GetRecoveryTrend(weekAgo, "")
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("week recovery: %v", err))
+		}
 		for _, r := range weekRecoveries {
 			msg.sparkline = append(msg.sparkline, r.RecoveryScore)
 		}
 
-		workouts, _ := db.ListWorkouts(weekAgo, "")
+		workouts, err := db.ListWorkouts(weekAgo, "")
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("workouts: %v", err))
+		}
 		if len(workouts) > 5 {
 			workouts = workouts[:5]
 		}
 		msg.workouts = workouts
 
+		// Generate alerts from today's data
+		if msg.recovery > 0 && msg.recovery < 33 {
+			msg.alerts = append(msg.alerts, fmt.Sprintf("Low recovery: %.0f%%", msg.recovery))
+		}
+		if msg.strain > 18 {
+			msg.alerts = append(msg.alerts, fmt.Sprintf("High strain: %.1f", msg.strain))
+		}
+
+		if len(errs) > 0 {
+			msg.err = strings.Join(errs, "; ")
+		}
 		return msg
 	}
 }
@@ -94,12 +123,16 @@ func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recoveryScore = msg.recovery
 		m.hrvValue = msg.hrv
 		m.rhrValue = msg.rhr
-		m.sleepHours = msg.sleepHours
+		m.sleepHours = msg.sleepHrs
 		m.sleepEffPct = msg.sleepEff
 		m.dayStrain = msg.strain
 		m.sparklineData = msg.sparkline
 		m.recentWorkouts = msg.workouts
+		m.alerts = msg.alerts
+		m.err = msg.err
 		m.loaded = true
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	}
 	return m, nil
 }
@@ -109,9 +142,18 @@ func (m *DashboardModel) View() string {
 		return tui.MutedStyle.Render("Loading dashboard...")
 	}
 
+	sparkW := m.sparkWidth()
 	var sections []string
 
-	gauge := components.Gauge(m.recoveryScore, 30)
+	if m.err != "" {
+		sections = append(sections, tui.RedStyle.Render("Error: "+m.err))
+	}
+
+	for _, alert := range m.alerts {
+		sections = append(sections, tui.YellowStyle.Render("  ⚠ "+alert))
+	}
+
+	gauge := components.Gauge(m.recoveryScore, sparkW)
 	sections = append(sections, tui.BoxStyle.Render(gauge))
 
 	metrics := fmt.Sprintf(
@@ -124,7 +166,7 @@ func (m *DashboardModel) View() string {
 	sections = append(sections, metrics)
 
 	if len(m.sparklineData) > 0 {
-		spark := components.Sparkline(m.sparklineData, 30)
+		spark := components.Sparkline(m.sparklineData, sparkW)
 		sparkSection := fmt.Sprintf("%s\n%s",
 			tui.TitleStyle.Render("7-Day Recovery"),
 			tui.GreenStyle.Render(spark))
@@ -151,4 +193,15 @@ func (m *DashboardModel) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m *DashboardModel) sparkWidth() int {
+	w := m.width - 10
+	if w < 20 {
+		w = 20
+	}
+	if w > 60 {
+		w = 60
+	}
+	return w
 }

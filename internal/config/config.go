@@ -11,6 +11,13 @@ type Config struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURL  string `yaml:"redirect_url"`
+	Alerts       Alerts `yaml:"alerts"`
+}
+
+type Alerts struct {
+	LowRecovery float64 `yaml:"low_recovery"` // Alert when recovery below this (default 33)
+	HighStrain  float64 `yaml:"high_strain"`  // Alert when strain above this (default 18)
+	Enabled     bool    `yaml:"enabled"`
 }
 
 func Dir() string {
@@ -33,6 +40,11 @@ func TokenPath() string {
 func Load() (*Config, error) {
 	cfg := &Config{
 		RedirectURL: "http://localhost:8484/callback",
+		Alerts: Alerts{
+			LowRecovery: 33,
+			HighStrain:  18,
+			Enabled:     true,
+		},
 	}
 	data, err := os.ReadFile(Path())
 	if err != nil {

@@ -25,20 +25,23 @@ var metricLabels = map[string]string{
 
 type CorrelationsModel struct {
 	db     *store.DB
+	width  int
 	xIdx   int
 	yIdx   int
 	data   []store.CorrelationPoint
 	r      float64
 	loaded bool
+	err    string
 }
 
 func NewCorrelations(db *store.DB) CorrelationsModel {
-	return CorrelationsModel{db: db, xIdx: 1, yIdx: 0}
+	return CorrelationsModel{db: db, xIdx: 1, yIdx: 0, width: 80}
 }
 
 type correlationDataMsg struct {
 	data []store.CorrelationPoint
 	r    float64
+	err  error
 }
 
 func (m *CorrelationsModel) Init() tea.Cmd {
@@ -51,7 +54,10 @@ func (m *CorrelationsModel) Refresh() tea.Cmd {
 	return func() tea.Msg {
 		xMetric := metricNames[xIdx]
 		yMetric := metricNames[yIdx]
-		data, _ := db.GetCorrelationData(xMetric, yMetric)
+		data, err := db.GetCorrelationData(xMetric, yMetric)
+		if err != nil {
+			return correlationDataMsg{err: err}
+		}
 
 		var xs, ys []float64
 		for _, p := range data {
@@ -66,10 +72,17 @@ func (m *CorrelationsModel) Refresh() tea.Cmd {
 func (m *CorrelationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case correlationDataMsg:
+		if msg.err != nil {
+			m.err = msg.err.Error()
+		} else {
+			m.err = ""
+		}
 		m.data = msg.data
 		m.r = msg.r
 		m.loaded = true
 		return m, nil
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "left", "<":
@@ -111,8 +124,16 @@ func (m *CorrelationsModel) View() string {
 
 	header := tui.TitleStyle.Render(fmt.Sprintf("Correlations: %s vs %s", xLabel, yLabel))
 
+	var sections []string
+	sections = append(sections, header)
+
+	if m.err != "" {
+		sections = append(sections, tui.RedStyle.Render("Error: "+m.err))
+	}
+
 	if len(m.data) < 3 {
-		return header + "\n" + tui.MutedStyle.Render("Not enough data for correlation (need 3+ points).")
+		sections = append(sections, tui.MutedStyle.Render("Not enough data for correlation (need 3+ points). Run 'whooper sync' first."))
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
 	rStr := fmt.Sprintf("r = %.3f", m.r)
@@ -125,11 +146,21 @@ func (m *CorrelationsModel) View() string {
 		rStyled = tui.MutedStyle.Render(rStr + " (weak)")
 	}
 
-	plotWidth, plotHeight := 50, 20
+	// Responsive plot size
+	plotWidth := m.width - 10
+	if plotWidth < 30 {
+		plotWidth = 30
+	}
+	if plotWidth > 60 {
+		plotWidth = 60
+	}
+	plotHeight := 20
+	if m.width < 60 {
+		plotHeight = 12
+	}
+
 	scatter := renderScatter(m.data, plotWidth, plotHeight)
 
-	var sections []string
-	sections = append(sections, header)
 	sections = append(sections, fmt.Sprintf("  Pearson %s  (n=%d)", rStyled, len(m.data)))
 	sections = append(sections, "")
 	sections = append(sections, fmt.Sprintf("  %s (Y: %s)", tui.AccentStyle.Render("▲"), yLabel))

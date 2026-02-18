@@ -1,0 +1,148 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Recovery Score",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT date(created_at) as time, recovery_score FROM recovery WHERE score_state = 'SCORED' ORDER BY time",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#00D46A" },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      }
+    },
+    {
+      "title": "HRV (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT date(created_at) as time, hrv_rmssd as hrv FROM recovery WHERE score_state = 'SCORED' ORDER BY time",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#16A085" },
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "title": "Resting Heart Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT date(created_at) as time, resting_heart_rate as rhr FROM recovery WHERE score_state = 'SCORED' ORDER BY time",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#FF3333" },
+          "unit": "bpm"
+        }
+      }
+    },
+    {
+      "title": "Daily Strain",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT date(start) as time, strain FROM cycle WHERE score_state = 'SCORED' ORDER BY time",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#FFCC00" },
+          "min": 0,
+          "max": 21
+        }
+      }
+    },
+    {
+      "title": "Sleep Duration (hours)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT date(start) as time, CAST(total_in_bed_time_milli - total_awake_time_milli AS REAL) / 3600000.0 as sleep_hours FROM sleep WHERE nap = 0 AND score_state = 'SCORED' ORDER BY time",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#5B9BD5" },
+          "unit": "h"
+        }
+      }
+    },
+    {
+      "title": "Sleep Efficiency (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT date(start) as time, sleep_efficiency_pct FROM sleep WHERE nap = 0 AND score_state = 'SCORED' ORDER BY time",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#9B59B6" },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      }
+    },
+    {
+      "title": "Workouts",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT date(w.start) as date, w.sport_id, w.strain, w.average_heart_rate as avg_hr, w.max_heart_rate as max_hr, CAST(w.kilojoule AS INTEGER) as kcal, ROUND(w.distance_meter / 1000.0, 1) as km FROM workout w WHERE w.score_state = 'SCORED' ORDER BY w.start DESC LIMIT 50",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["whoop", "health"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "title": "Whooper Health Dashboard",
+  "uid": "whooper-main"
+}

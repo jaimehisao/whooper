@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"git.infra.hisao.org/hisao/whooper/internal/analysis"
 	"git.infra.hisao.org/hisao/whooper/internal/api"
 	"git.infra.hisao.org/hisao/whooper/internal/auth"
 	"git.infra.hisao.org/hisao/whooper/internal/config"
@@ -48,6 +49,17 @@ var syncCmd = &cobra.Command{
 			return fmt.Errorf("sync: %w", err)
 		}
 		fmt.Println("Sync complete!")
+
+		// Check alerts
+		alerts := analysis.CheckAlerts(db, cfg)
+		for _, a := range alerts {
+			switch a.Level {
+			case "critical":
+				fmt.Printf("  [!] %s\n", a.Message)
+			default:
+				fmt.Printf("  [*] %s\n", a.Message)
+			}
+		}
 		return nil
 	},
 }

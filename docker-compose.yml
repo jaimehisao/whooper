@@ -1,0 +1,16 @@
+services:
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=whooper
+      - GF_INSTALL_PLUGINS=frser-sqlite-datasource
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+      - ${HOME}/.whooper/whooper.db:/data/whooper.db:ro
+    restart: unless-stopped
+
+volumes:
+  grafana-data:

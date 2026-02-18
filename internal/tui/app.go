@@ -50,7 +50,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		return a, nil
+		// Propagate to all views
+		var cmds []tea.Cmd
+		for i, v := range a.views {
+			if v != nil {
+				var cmd tea.Cmd
+				a.views[i], cmd = v.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+		return a, tea.Batch(cmds...)
 
 	case syncDoneMsg:
 		a.syncing = false

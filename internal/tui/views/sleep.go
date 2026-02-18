@@ -17,19 +17,22 @@ var sleepRanges = []int{7, 14, 30, 90}
 
 type SleepModel struct {
 	db       *store.DB
+	width    int
 	rangeIdx int
 	trend    []store.SleepTrendPoint
 	sleeps   []models.Sleep
 	loaded   bool
+	err      string
 }
 
 func NewSleep(db *store.DB) SleepModel {
-	return SleepModel{db: db, rangeIdx: 2}
+	return SleepModel{db: db, rangeIdx: 2, width: 80}
 }
 
 type sleepDataMsg struct {
 	trend  []store.SleepTrendPoint
 	sleeps []models.Sleep
+	err    string
 }
 
 func (m *SleepModel) Init() tea.Cmd {
@@ -42,9 +45,25 @@ func (m *SleepModel) Refresh() tea.Cmd {
 	return func() tea.Msg {
 		days := sleepRanges[rangeIdx]
 		from := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour).Format("2006-01-02")
-		trend, _ := db.GetSleepTrend(from, "")
-		sleeps, _ := db.ListSleeps(from, "", true)
-		return sleepDataMsg{trend: trend, sleeps: sleeps}
+		msg := sleepDataMsg{}
+		var errs []string
+
+		trend, err := db.GetSleepTrend(from, "")
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+		msg.trend = trend
+
+		sleeps, err := db.ListSleeps(from, "", true)
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+		msg.sleeps = sleeps
+
+		if len(errs) > 0 {
+			msg.err = fmt.Sprintf("sleep: %s", errs)
+		}
+		return msg
 	}
 }
 
@@ -53,8 +72,11 @@ func (m *SleepModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sleepDataMsg:
 		m.trend = msg.trend
 		m.sleeps = msg.sleeps
+		m.err = msg.err
 		m.loaded = true
 		return m, nil
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "left", "<":
@@ -79,13 +101,23 @@ func (m *SleepModel) View() string {
 
 	days := sleepRanges[m.rangeIdx]
 	header := tui.TitleStyle.Render(fmt.Sprintf("Sleep Trends (%dd)  < %dd >", days, days))
-
-	if len(m.trend) == 0 {
-		return header + "\n" + tui.MutedStyle.Render("No sleep data available.")
+	sparkW := m.sparkWidth()
+	barW := sparkW - 10
+	if barW < 20 {
+		barW = 20
 	}
 
 	var sections []string
 	sections = append(sections, header)
+
+	if m.err != "" {
+		sections = append(sections, tui.RedStyle.Render("Error: "+m.err))
+	}
+
+	if len(m.trend) == 0 {
+		sections = append(sections, tui.MutedStyle.Render("No sleep data available. Run 'whooper sync' first."))
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	}
 
 	var durations, efficiencies []float64
 	for _, t := range m.trend {
@@ -93,12 +125,12 @@ func (m *SleepModel) View() string {
 		efficiencies = append(efficiencies, t.EfficiencyPct)
 	}
 
-	durSpark := components.Sparkline(durations, 50)
+	durSpark := components.Sparkline(durations, sparkW)
 	sections = append(sections, fmt.Sprintf("\n%s\n%s",
 		tui.TextStyle.Render("Sleep Duration (hours)"),
 		tui.AccentStyle.Render(durSpark)))
 
-	effSpark := components.Sparkline(efficiencies, 50)
+	effSpark := components.Sparkline(efficiencies, sparkW)
 	sections = append(sections, fmt.Sprintf("\n%s\n%s",
 		tui.TextStyle.Render("Sleep Efficiency (%%)"),
 		tui.GreenStyle.Render(effSpark)))
@@ -115,7 +147,6 @@ func (m *SleepModel) View() string {
 	remStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9B59B6"))
 	awakeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#E74C3C"))
 
-	barWidth := 40
 	for i := limit - 1; i >= 0; i-- {
 		s := m.sleeps[i]
 		if s.Score == nil {
@@ -127,17 +158,17 @@ func (m *SleepModel) View() string {
 			continue
 		}
 
-		lightW := int(float64(ss.TotalLightSleepTimeMilli) / total * float64(barWidth))
-		swsW := int(float64(ss.TotalSlowWaveSleepTimeMilli) / total * float64(barWidth))
-		remW := int(float64(ss.TotalRemSleepTimeMilli) / total * float64(barWidth))
-		awakeW := int(float64(ss.TotalAwakeTimeMilli) / total * float64(barWidth))
-		remainder := barWidth - lightW - swsW - remW - awakeW
+		lightW := int(float64(ss.TotalLightSleepTimeMilli) / total * float64(barW))
+		swsW2 := int(float64(ss.TotalSlowWaveSleepTimeMilli) / total * float64(barW))
+		remW := int(float64(ss.TotalRemSleepTimeMilli) / total * float64(barW))
+		awakeW := int(float64(ss.TotalAwakeTimeMilli) / total * float64(barW))
+		remainder := barW - lightW - swsW2 - remW - awakeW
 		lightW += remainder
 
 		t, _ := time.Parse(time.RFC3339, s.Start)
 		bar := awakeStyle.Render(repeatStr("█", awakeW)) +
 			lightStyle.Render(repeatStr("█", lightW)) +
-			swsStyle.Render(repeatStr("█", swsW)) +
+			swsStyle.Render(repeatStr("█", swsW2)) +
 			remStyle.Render(repeatStr("█", remW))
 
 		hours := float64(ss.TotalInBedTimeMilli-ss.TotalAwakeTimeMilli) / 3600000.0
@@ -162,6 +193,17 @@ func (m *SleepModel) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m *SleepModel) sparkWidth() int {
+	w := m.width - 10
+	if w < 20 {
+		w = 20
+	}
+	if w > 60 {
+		w = 60
+	}
+	return w
 }
 
 func repeatStr(s string, n int) string {

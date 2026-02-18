@@ -17,19 +17,22 @@ var workoutRanges = []int{7, 14, 30, 90}
 
 type WorkoutsModel struct {
 	db       *store.DB
+	width    int
 	rangeIdx int
 	workouts []models.Workout
 	cursor   int
 	detail   bool
 	loaded   bool
+	err      string
 }
 
 func NewWorkouts(db *store.DB) WorkoutsModel {
-	return WorkoutsModel{db: db, rangeIdx: 2}
+	return WorkoutsModel{db: db, rangeIdx: 2, width: 80}
 }
 
 type workoutsDataMsg struct {
 	workouts []models.Workout
+	err      error
 }
 
 func (m *WorkoutsModel) Init() tea.Cmd {
@@ -42,19 +45,26 @@ func (m *WorkoutsModel) Refresh() tea.Cmd {
 	return func() tea.Msg {
 		days := workoutRanges[rangeIdx]
 		from := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour).Format("2006-01-02")
-		workouts, _ := db.ListWorkouts(from, "")
-		return workoutsDataMsg{workouts: workouts}
+		workouts, err := db.ListWorkouts(from, "")
+		return workoutsDataMsg{workouts: workouts, err: err}
 	}
 }
 
 func (m *WorkoutsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case workoutsDataMsg:
+		if msg.err != nil {
+			m.err = msg.err.Error()
+		} else {
+			m.err = ""
+		}
 		m.workouts = msg.workouts
 		m.loaded = true
 		m.cursor = 0
 		m.detail = false
 		return m, nil
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
@@ -92,16 +102,29 @@ func (m *WorkoutsModel) View() string {
 	days := workoutRanges[m.rangeIdx]
 	header := tui.TitleStyle.Render(fmt.Sprintf("Workouts (%dd)  < %dd >", days, days))
 
+	var sections []string
+	sections = append(sections, header)
+
+	if m.err != "" {
+		sections = append(sections, tui.RedStyle.Render("Error: "+m.err))
+	}
+
 	if len(m.workouts) == 0 {
-		return header + "\n" + tui.MutedStyle.Render("No workouts found.")
+		sections = append(sections, tui.MutedStyle.Render("No workouts found. Run 'whooper sync' first."))
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
 	if m.detail && m.cursor < len(m.workouts) {
 		return m.detailView()
 	}
 
+	// Responsive column widths
+	sportW := 20
+	if m.width < 90 {
+		sportW = 14
+	}
 	headers := []string{"Date", "Sport", "Strain", "Avg HR", "Max HR", "Duration"}
-	widths := []int{12, 20, 8, 8, 8, 10}
+	widths := []int{12, sportW, 8, 8, 8, 10}
 
 	var rows [][]string
 	for _, w := range m.workouts {
@@ -123,9 +146,9 @@ func (m *WorkoutsModel) View() string {
 	}
 
 	table := components.HighlightedTable(headers, rows, widths, m.cursor)
-	return lipgloss.JoinVertical(lipgloss.Left,
-		header, table,
-		tui.MutedStyle.Render("  ↑↓ navigate  enter detail  esc back"))
+	sections = append(sections, table)
+	sections = append(sections, tui.MutedStyle.Render("  ↑↓ navigate  enter detail  esc back"))
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
 func (m *WorkoutsModel) detailView() string {
@@ -152,7 +175,7 @@ func (m *WorkoutsModel) detailView() string {
 		}
 		if s.ZoneDuration != nil {
 			zd := s.ZoneDuration
-			total := float64(zd.ZoneZeroMilli + zd.ZoneOneMilli + zd.ZoneTwoMilli + zd.ZoneThreeMilli + zd.ZoneFourMilli + zd.ZoneFiveMilli) / 60000
+			total := float64(zd.ZoneZeroMilli+zd.ZoneOneMilli+zd.ZoneTwoMilli+zd.ZoneThreeMilli+zd.ZoneFourMilli+zd.ZoneFiveMilli) / 60000
 			lines = append(lines, "", tui.AccentStyle.Render("  HR Zones:"))
 			items := []components.BarItem{
 				{Label: "Zone 0", Value: float64(zd.ZoneZeroMilli) / 60000, MaxValue: total, Color: lipgloss.Color("#666666")},
@@ -162,7 +185,11 @@ func (m *WorkoutsModel) detailView() string {
 				{Label: "Zone 4", Value: float64(zd.ZoneFourMilli) / 60000, MaxValue: total, Color: lipgloss.Color("#FF6600")},
 				{Label: "Zone 5", Value: float64(zd.ZoneFiveMilli) / 60000, MaxValue: total, Color: lipgloss.Color("#FF3333")},
 			}
-			lines = append(lines, components.BarChart(items, 25))
+			barW := 25
+			if m.width > 100 {
+				barW = 35
+			}
+			lines = append(lines, components.BarChart(items, barW))
 		}
 	}
 
