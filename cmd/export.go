@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"git.infra.hisao.org/hisao/whooper/internal/config"
@@ -68,7 +69,7 @@ var exportCmd = &cobra.Command{
 	},
 }
 
-func writeCSV(w *os.File, entity string, data any) error { //nolint:unparam
+func writeCSV(w io.Writer, entity string, data any) error {
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
 

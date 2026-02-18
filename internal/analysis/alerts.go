@@ -20,33 +20,39 @@ func CheckAlerts(db *store.DB, cfg *config.Config) []Alert {
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")
-	var alerts []Alert
 
+	var recovery, strain float64
 	recoveries, err := db.GetRecoveryTrend(today, "")
 	if err == nil && len(recoveries) > 0 {
-		r := recoveries[0]
-		if r.RecoveryScore < cfg.Alerts.LowRecovery {
-			level := "warning"
-			if r.RecoveryScore < cfg.Alerts.LowRecovery/2 {
-				level = "critical"
-			}
-			alerts = append(alerts, Alert{
-				Level:   level,
-				Message: fmt.Sprintf("Low recovery: %.0f%% (threshold: %.0f%%)", r.RecoveryScore, cfg.Alerts.LowRecovery),
-			})
-		}
+		recovery = recoveries[0].RecoveryScore
 	}
 
 	strains, err := db.GetStrainTrend(today, "")
 	if err == nil && len(strains) > 0 {
-		s := strains[0]
-		if s.Strain > cfg.Alerts.HighStrain {
-			alerts = append(alerts, Alert{
-				Level:   "warning",
-				Message: fmt.Sprintf("High strain: %.1f (threshold: %.0f)", s.Strain, cfg.Alerts.HighStrain),
-			})
-		}
+		strain = strains[0].Strain
 	}
 
+	return EvaluateAlerts(recovery, strain, cfg.Alerts.LowRecovery, cfg.Alerts.HighStrain)
+}
+
+// EvaluateAlerts checks recovery and strain values against thresholds without DB access.
+func EvaluateAlerts(recovery, strain, lowRecoveryThreshold, highStrainThreshold float64) []Alert {
+	var alerts []Alert
+	if recovery < lowRecoveryThreshold {
+		level := "warning"
+		if recovery < lowRecoveryThreshold/2 {
+			level = "critical"
+		}
+		alerts = append(alerts, Alert{
+			Level:   level,
+			Message: fmt.Sprintf("Low recovery: %.0f%% (threshold: %.0f%%)", recovery, lowRecoveryThreshold),
+		})
+	}
+	if strain > highStrainThreshold {
+		alerts = append(alerts, Alert{
+			Level:   "warning",
+			Message: fmt.Sprintf("High strain: %.1f (threshold: %.0f)", strain, highStrainThreshold),
+		})
+	}
 	return alerts
 }
