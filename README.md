@@ -122,41 +122,244 @@ whooper
 
 ## Data Flow
 
+```mermaid
+graph TD
+    subgraph External
+        WHOOP[Whoop API<br/>REST + OAuth2]
+    end
+
+    subgraph Auth
+        OAUTH[auth/oauth.go<br/>OAuth2 Config]
+        SERVER[auth/server.go<br/>Callback :8484]
+        TOKEN[auth/token.go<br/>Token Persistence]
+        OAUTH --> SERVER
+        SERVER --> TOKEN
+    end
+
+    subgraph API Layer
+        CLIENT[api/client.go<br/>Bearer Auth + Retry]
+        FETCH["api/pagination.go<br/>FetchAll[T] Generic"]
+        CLIENT --> FETCH
+    end
+
+    subgraph Data Models
+        MODELS["models/<br/>Profile, Cycle, Recovery,<br/>Sleep, Workout"]
+    end
+
+    subgraph Sync Engine
+        SYNCER[sync/syncer.go<br/>Incremental + 1d Overlap]
+    end
+
+    subgraph Storage
+        DB[(SQLite<br/>WAL Mode)]
+        MIGRATIONS[store/migrations.go<br/>Flat Schema DDL]
+        CRUD[store/*.go<br/>Batch UPSERT + Queries]
+        MIGRATIONS --> DB
+        CRUD --> DB
+    end
+
+    subgraph Analysis
+        TRENDS[analysis/trends.go<br/>Moving Averages]
+        CORR[analysis/correlations.go<br/>Pearson r]
+        SUMMARY[analysis/summary.go<br/>Weekly Reports]
+    end
+
+    subgraph "TUI (Bubbletea)"
+        APP[tui/app.go<br/>Tab Navigation]
+        STYLES[tui/styles.go<br/>Whoop Colors]
+        COMPONENTS["tui/components/<br/>Sparkline, Gauge,<br/>BarChart, Table"]
+        VIEWS["tui/views/<br/>Dashboard, Recovery,<br/>Sleep, Workouts,<br/>Correlations"]
+        APP --> VIEWS
+        STYLES --> VIEWS
+        COMPONENTS --> VIEWS
+    end
+
+    subgraph CLI
+        CMD["cmd/<br/>login, sync, config,<br/>export, tui"]
+    end
+
+    WHOOP <-->|"JSON + Bearer Token"| CLIENT
+    TOKEN -->|Auto-refresh| CLIENT
+    FETCH -->|"[]T records"| SYNCER
+    WHOOP -.->|Response structs| MODELS
+    SYNCER -->|Batch UPSERT| CRUD
+    DB -->|Trend queries| TRENDS
+    DB -->|Metric pairs| CORR
+    DB -->|Date ranges| SUMMARY
+    TRENDS --> VIEWS
+    CORR --> VIEWS
+    DB -->|CRUD| VIEWS
+    CMD -->|Orchestrates| SYNCER
+    CMD -->|Launches| APP
+    CMD -->|"JSON/CSV"| DB
+
+    style WHOOP fill:#1a1a2e,stroke:#16a085,color:#e0e0e0
+    style DB fill:#1a1a2e,stroke:#00d46a,color:#e0e0e0
+    style APP fill:#1a1a2e,stroke:#16a085,color:#e0e0e0
+    style VIEWS fill:#1a1a2e,stroke:#00d46a,color:#e0e0e0
 ```
-┌──────────────┐     OAuth2      ┌──────────────┐
-│  Whoop API   │◄───Bearer───────│   API Client  │
-│  (REST)      │    + retry      │  (resty)      │
-└──────┬───────┘                 └──────┬────────┘
-       │                                │
-       │  JSON responses                │  FetchAll[T]
-       │                                │
-       ▼                                ▼
-┌──────────────┐                ┌───────────────┐
-│   Models     │                │  Sync Engine  │
-│  (structs)   │                │  (incremental │
-└──────────────┘                │   + overlap)  │
-                                └───────┬───────┘
-                                        │
-                                        │  Batch UPSERT
-                                        ▼
-                                ┌───────────────┐
-                         ┌──────│    SQLite      │──────┐
-                         │      │  (WAL mode)    │      │
-                         │      └───────────────┘      │
-                         │                              │
-                    Trend queries              CRUD + Export
-                         │                              │
-                         ▼                              ▼
-                  ┌─────────────┐             ┌─────────────┐
-                  │  Analysis   │             │   CLI       │
-                  │  (MA, r)    │             │  (export)   │
-                  └──────┬──────┘             └─────────────┘
-                         │
-                         ▼
-                  ┌─────────────┐
-                  │  TUI Views  │
-                  │  (bubbletea)│
-                  └─────────────┘
+
+### Sync Sequence
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as whooper sync
+    participant Sync as Sync Engine
+    participant API as API Client
+    participant Whoop as Whoop API
+    participant DB as SQLite
+
+    User->>CLI: whooper sync
+    CLI->>DB: GetSyncState("cycles")
+    DB-->>CLI: last_synced timestamp
+    CLI->>Sync: SyncAll()
+
+    Sync->>API: GetProfile()
+    API->>Whoop: GET /v1/user/profile/basic
+    Whoop-->>API: Profile JSON
+    Sync->>DB: SaveProfile()
+
+    loop For each: Cycles, Recoveries, Sleeps, Workouts
+        Sync->>API: GetCycles(start - 1 day)
+        API->>Whoop: GET /v1/cycle?start=...
+        loop Paginate
+            Whoop-->>API: {records, next_token}
+            API->>Whoop: GET /v1/cycle?nextToken=...
+        end
+        API-->>Sync: []Cycle
+        Sync->>DB: SaveCycles() (batch UPSERT)
+        Sync-->>CLI: progress("cycles", count)
+    end
+
+    Sync->>DB: SetSyncState("cycles", now)
+    CLI-->>User: Sync complete!
+```
+
+### TUI Navigation
+
+```mermaid
+stateDiagram-v2
+    [*] --> Dashboard: Launch
+
+    Dashboard --> Recovery: 2
+    Dashboard --> Sleep: 3
+    Dashboard --> Workouts: 4
+    Dashboard --> Correlations: 5
+
+    Recovery --> Dashboard: 1
+    Recovery --> Sleep: 3
+    Recovery --> Workouts: 4
+    Recovery --> Correlations: 5
+
+    Sleep --> Dashboard: 1
+    Sleep --> Recovery: 2
+    Sleep --> Workouts: 4
+    Sleep --> Correlations: 5
+
+    Workouts --> Dashboard: 1
+    Workouts --> Recovery: 2
+    Workouts --> Sleep: 3
+    Workouts --> Correlations: 5
+    Workouts --> WorkoutDetail: Enter
+    WorkoutDetail --> Workouts: Esc
+
+    Correlations --> Dashboard: 1
+    Correlations --> Recovery: 2
+    Correlations --> Sleep: 3
+    Correlations --> Workouts: 4
+
+    state Dashboard {
+        [*] --> TodayRecovery
+        TodayRecovery --> Metrics
+        Metrics --> Sparkline7d
+        Sparkline7d --> RecentWorkouts
+    }
+
+    state Recovery {
+        [*] --> RecoveryTrend
+        RecoveryTrend --> HRVTrend
+        HRVTrend --> RHRTrend
+        note right of RecoveryTrend: < > changes range\n7/14/30/90 days
+    }
+
+    state Correlations {
+        [*] --> ScatterPlot
+        note right of ScatterPlot: < > X metric\n[ ] Y metric\nShows Pearson r
+    }
+```
+
+### Database Schema
+
+```mermaid
+erDiagram
+    profile {
+        int user_id PK
+        text email
+        text first_name
+        text last_name
+    }
+
+    cycle {
+        int id PK
+        int user_id
+        text start
+        text end
+        text score_state
+        real strain
+        real kilojoule
+        int average_heart_rate
+        int max_heart_rate
+    }
+
+    recovery {
+        int cycle_id PK
+        int sleep_id
+        int user_id
+        text score_state
+        real recovery_score
+        real hrv_rmssd
+        real resting_heart_rate
+        real spo2_percentage
+        real skin_temp_celsius
+    }
+
+    sleep {
+        int id PK
+        int user_id
+        text start
+        text end
+        int nap
+        text score_state
+        int total_in_bed_time_milli
+        int total_light_sleep_time_milli
+        int total_slow_wave_sleep_time_milli
+        int total_rem_sleep_time_milli
+        real sleep_efficiency_pct
+        real sleep_performance_pct
+    }
+
+    workout {
+        int id PK
+        int user_id
+        text start
+        text end
+        int sport_id
+        text score_state
+        real strain
+        int average_heart_rate
+        int max_heart_rate
+        real kilojoule
+        real distance_meter
+    }
+
+    sync_state {
+        text entity PK
+        text last_synced
+    }
+
+    cycle ||--o| recovery : "cycle_id"
+    sleep ||--o| recovery : "sleep_id"
 ```
 
 ## Design Decisions
