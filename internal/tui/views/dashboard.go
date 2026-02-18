@@ -179,7 +179,7 @@ func (m *DashboardModel) View() string {
 		for _, w := range m.recentWorkouts {
 			sport := models.SportName[w.SportID]
 			if sport == "" {
-				sport = "Unknown"
+				sport = fmt.Sprintf("Sport %d", w.SportID)
 			}
 			strain := 0.0
 			if w.Score != nil {

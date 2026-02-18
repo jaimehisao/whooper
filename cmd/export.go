@@ -68,7 +68,7 @@ var exportCmd = &cobra.Command{
 	},
 }
 
-func writeCSV(w *os.File, entity string, data any) error {
+func writeCSV(w *os.File, entity string, data any) error { //nolint:unparam
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
 

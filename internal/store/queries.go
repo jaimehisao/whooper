@@ -144,9 +144,7 @@ func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, e
 		return nil, err
 	}
 
-	// Join through cycle to align data by date.
-	query := fmt.Sprintf(`SELECT a.%s, b.%s FROM`, colX, colY)
-
+	var query string
 	if tableX == tableY {
 		query = fmt.Sprintf(`SELECT %s, %s FROM %s WHERE score_state = 'SCORED'`,
 			colX, colY, tableX)

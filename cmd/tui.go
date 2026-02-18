@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"git.infra.hisao.org/hisao/whooper/internal/api"
@@ -10,7 +11,6 @@ import (
 	gosync "git.infra.hisao.org/hisao/whooper/internal/sync"
 	"git.infra.hisao.org/hisao/whooper/internal/tui"
 	"git.infra.hisao.org/hisao/whooper/internal/tui/views"
-	"golang.org/x/oauth2"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +33,7 @@ var tuiCmd = &cobra.Command{
 				oauthCfg := auth.OAuthConfig(cfg)
 				tokenSource := auth.PersistingTokenSource(
 					config.TokenPath(),
-					oauthCfg.TokenSource(oauth2.NoContext, token),
+					oauthCfg.TokenSource(context.Background(), token),
 				)
 				client := api.NewClient(tokenSource)
 				syncFn = func() error {

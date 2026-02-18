@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"git.infra.hisao.org/hisao/whooper/internal/analysis"
@@ -9,7 +10,6 @@ import (
 	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 	gosync "git.infra.hisao.org/hisao/whooper/internal/sync"
-	"golang.org/x/oauth2"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +30,7 @@ var syncCmd = &cobra.Command{
 		oauthCfg := auth.OAuthConfig(cfg)
 		tokenSource := auth.PersistingTokenSource(
 			config.TokenPath(),
-			oauthCfg.TokenSource(oauth2.NoContext, token),
+			oauthCfg.TokenSource(context.Background(), token),
 		)
 
 		client := api.NewClient(tokenSource)

@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -166,10 +167,10 @@ func (m *SleepModel) View() string {
 		lightW += remainder
 
 		t, _ := time.Parse(time.RFC3339, s.Start)
-		bar := awakeStyle.Render(repeatStr("█", awakeW)) +
-			lightStyle.Render(repeatStr("█", lightW)) +
-			swsStyle.Render(repeatStr("█", swsW2)) +
-			remStyle.Render(repeatStr("█", remW))
+		bar := awakeStyle.Render(strings.Repeat("█", awakeW)) +
+			lightStyle.Render(strings.Repeat("█", lightW)) +
+			swsStyle.Render(strings.Repeat("█", swsW2)) +
+			remStyle.Render(strings.Repeat("█", remW))
 
 		hours := float64(ss.TotalInBedTimeMilli-ss.TotalAwakeTimeMilli) / 3600000.0
 		sections = append(sections, fmt.Sprintf("  %s  %s  %.1fh",
@@ -206,13 +207,3 @@ func (m *SleepModel) sparkWidth() int {
 	return w
 }
 
-func repeatStr(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	result := ""
-	for i := 0; i < n; i++ {
-		result += s
-	}
-	return result
-}
