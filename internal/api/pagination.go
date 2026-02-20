@@ -6,6 +6,8 @@ import (
 	"net/http"
 )
 
+const maxPages = 10000
+
 type paginatedResponse[T any] struct {
 	Records   []T    `json:"records"`
 	NextToken string `json:"next_token,omitempty"`
@@ -16,7 +18,7 @@ func FetchAll[T any](c *Client, endpoint string, params map[string]string) ([]T,
 	var all []T
 	nextToken := ""
 
-	for {
+	for page := 0; page < maxPages; page++ {
 		req := c.R.R().SetQueryParams(params)
 		if nextToken != "" {
 			req.SetQueryParam("nextToken", nextToken)
@@ -30,16 +32,16 @@ func FetchAll[T any](c *Client, endpoint string, params map[string]string) ([]T,
 			return nil, fmt.Errorf("fetch %s: status %d: %s", endpoint, resp.StatusCode(), resp.String())
 		}
 
-		var page paginatedResponse[T]
-		if err := json.Unmarshal(resp.Body(), &page); err != nil {
+		var pr paginatedResponse[T]
+		if err := json.Unmarshal(resp.Body(), &pr); err != nil {
 			return nil, fmt.Errorf("decode %s: %w", endpoint, err)
 		}
 
-		all = append(all, page.Records...)
-		if page.NextToken == "" {
+		all = append(all, pr.Records...)
+		if pr.NextToken == "" || pr.NextToken == nextToken {
 			break
 		}
-		nextToken = page.NextToken
+		nextToken = pr.NextToken
 	}
 	return all, nil
 }

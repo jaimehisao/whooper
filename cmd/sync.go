@@ -13,6 +13,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	syncFull  bool
+	syncSince string
+)
+
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Fetch data from the Whoop API and store locally",
@@ -44,8 +49,19 @@ var syncCmd = &cobra.Command{
 			fmt.Printf("  %s: %d records\n", entity, count)
 		})
 
-		fmt.Println("Syncing data from Whoop...")
-		if err := syncer.SyncAll(); err != nil {
+		start := ""
+		switch {
+		case syncFull:
+			fmt.Println("Performing full re-sync from Whoop...")
+			start = "full"
+		case syncSince != "":
+			fmt.Printf("Syncing data from %s...\n", syncSince)
+			start = syncSince + "T00:00:00.000Z"
+		default:
+			fmt.Println("Syncing data from Whoop...")
+		}
+
+		if err := syncer.SyncFrom(start); err != nil {
 			return fmt.Errorf("sync: %w", err)
 		}
 		fmt.Println("Sync complete!")
@@ -65,5 +81,7 @@ var syncCmd = &cobra.Command{
 }
 
 func init() {
+	syncCmd.Flags().BoolVar(&syncFull, "full", false, "Perform a full re-sync (ignore incremental state)")
+	syncCmd.Flags().StringVar(&syncSince, "since", "", "Sync from a specific date (YYYY-MM-DD)")
 	rootCmd.AddCommand(syncCmd)
 }

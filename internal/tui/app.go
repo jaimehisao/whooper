@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +12,7 @@ import (
 var tabNames = []string{"Dashboard", "Recovery", "Sleep", "Workouts", "Correlations"}
 
 type syncDoneMsg struct{ err error }
+type clearSyncMsg struct{}
 
 type App struct {
 	syncFunc  func() error
@@ -19,6 +21,7 @@ type App struct {
 	views     [5]tea.Model
 	syncing   bool
 	syncMsg   string
+	syncErr   bool
 	width     int
 	height    int
 }
@@ -67,11 +70,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.syncing = false
 		if msg.err != nil {
 			a.syncMsg = fmt.Sprintf("Sync error: %v", msg.err)
+			a.syncErr = true
 		} else {
 			a.syncMsg = "Sync complete!"
-			if v, ok := a.views[a.activeTab].(interface{ Refresh() tea.Cmd }); ok {
-				return a, v.Refresh()
+			a.syncErr = false
+		}
+		// Refresh all views after sync
+		var cmds []tea.Cmd
+		for _, v := range a.views {
+			if r, ok := v.(interface{ Refresh() tea.Cmd }); ok {
+				cmds = append(cmds, r.Refresh())
 			}
+		}
+		// Clear sync message after 5 seconds
+		cmds = append(cmds, tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
+			return clearSyncMsg{}
+		}))
+		return a, tea.Batch(cmds...)
+
+	case clearSyncMsg:
+		if !a.syncing {
+			a.syncMsg = ""
 		}
 		return a, nil
 
@@ -94,10 +113,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newTab = 4
 		case key.Matches(msg, a.keys.NextTab):
 			newTab = (a.activeTab + 1) % 5
+		case key.Matches(msg, a.keys.PrevTab):
+			newTab = (a.activeTab + 4) % 5
 		case key.Matches(msg, a.keys.Sync):
 			if !a.syncing && a.syncFunc != nil {
 				a.syncing = true
 				a.syncMsg = "Syncing..."
+				a.syncErr = false
 				return a, func() tea.Msg {
 					err := a.syncFunc()
 					return syncDoneMsg{err: err}
@@ -108,7 +130,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if newTab >= 0 && newTab != a.activeTab {
 			a.activeTab = newTab
-			a.syncMsg = ""
 			if v, ok := a.views[a.activeTab].(interface{ Refresh() tea.Cmd }); ok {
 				return a, v.Refresh()
 			}
@@ -152,6 +173,8 @@ func (a *App) View() string {
 	if a.syncMsg != "" {
 		if a.syncing {
 			statusParts = append(statusParts, YellowStyle.Render(a.syncMsg))
+		} else if a.syncErr {
+			statusParts = append(statusParts, RedStyle.Render(a.syncMsg))
 		} else {
 			statusParts = append(statusParts, GreenStyle.Render(a.syncMsg))
 		}

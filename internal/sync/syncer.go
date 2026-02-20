@@ -2,6 +2,7 @@ package sync
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"git.infra.hisao.org/hisao/whooper/internal/api"
@@ -11,8 +12,8 @@ import (
 type ProgressFunc func(entity string, count int)
 
 type Syncer struct {
-	client *api.Client
-	db     *store.DB
+	client     *api.Client
+	db         *store.DB
 	onProgress ProgressFunc
 }
 
@@ -29,28 +30,65 @@ func (s *Syncer) progress(entity string, count int) {
 // SyncAll performs an incremental sync of all data types.
 // Uses 1-day overlap to catch retroactively updated scores.
 func (s *Syncer) SyncAll() error {
+	return s.SyncFrom("")
+}
+
+// SyncFrom syncs all data starting from the given date.
+// If start is empty, uses the last sync state (incremental sync).
+// Pass a specific date or "full" for a full re-sync.
+func (s *Syncer) SyncFrom(start string) error {
 	if err := s.syncProfile(); err != nil {
 		return fmt.Errorf("sync profile: %w", err)
 	}
 
-	start := s.getSyncStart()
+	switch start {
+	case "full":
+		start = "" // empty start = fetch everything
+	case "":
+		start = s.getSyncStart() // incremental
+	}
 
-	if err := s.syncCycles(start); err != nil {
-		return fmt.Errorf("sync cycles: %w", err)
+	type entityErr struct {
+		entity string
+		err    error
 	}
-	if err := s.syncRecoveries(start); err != nil {
-		return fmt.Errorf("sync recoveries: %w", err)
+
+	var mu sync.Mutex
+	var errs []entityErr
+	var wg sync.WaitGroup
+
+	syncEntity := func(name string, fn func(string) error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := fn(start); err != nil {
+				mu.Lock()
+				errs = append(errs, entityErr{name, err})
+				mu.Unlock()
+			}
+		}()
 	}
-	if err := s.syncSleeps(start); err != nil {
-		return fmt.Errorf("sync sleeps: %w", err)
-	}
-	if err := s.syncWorkouts(start); err != nil {
-		return fmt.Errorf("sync workouts: %w", err)
+
+	syncEntity("cycles", s.syncCycles)
+	syncEntity("recoveries", s.syncRecoveries)
+	syncEntity("sleeps", s.syncSleeps)
+	syncEntity("workouts", s.syncWorkouts)
+
+	wg.Wait()
+
+	if len(errs) > 0 {
+		msg := "sync errors:"
+		for _, e := range errs {
+			msg += fmt.Sprintf(" %s: %v;", e.entity, e.err)
+		}
+		return fmt.Errorf("%s", msg)
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, entity := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
-		_ = s.db.SetSyncState(entity, now)
+		if err := s.db.SetSyncState(entity, now); err != nil {
+			return fmt.Errorf("save sync state for %s: %w", entity, err)
+		}
 	}
 	return nil
 }
