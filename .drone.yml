@@ -1,0 +1,51 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: build
+    image: golang:1.24
+    commands:
+      - go mod download
+      - go build -ldflags "-s -w -X main.version=${DRONE_COMMIT_SHA:-dev}" -o whooper .
+
+  - name: test
+    image: golang:1.24
+    commands:
+      - go test ./...
+
+  - name: lint
+    image: golang:1.24
+    commands:
+      - go vet ./...
+
+  - name: coverage
+    image: golang:1.24
+    commands:
+      - go test ./... -coverprofile=coverage.out
+      - go install github.com/mattn/goveralls@latest
+      - goveralls -coverprofile=coverage.out -service=drone -reporter=golang
+    when:
+      - event: push
+        branch: [main]
+
+  - name: build-snapshot
+    image: golang:1.24
+    commands:
+      - go mod download
+      - go run github.com/goreleaser/goreleaser@v1.32.2 release --snapshot --clean
+    when:
+      - event: tag
+
+  - name: publish
+    image: alpine
+    commands:
+      - echo "Publishing release artifacts"
+    when:
+      - event: tag
+
+trigger:
+  event:
+    - push
+    - pull_request
+    - tag
