@@ -20,13 +20,21 @@ type Alerts struct {
 	Enabled     bool    `yaml:"enabled"`
 }
 
-func Dir() string {
+var dirFunc = func() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".whooper")
 }
 
-func Path() string {
+func Dir() string {
+	return dirFunc()
+}
+
+var pathFunc = func() string {
 	return filepath.Join(Dir(), "config.yaml")
+}
+
+func Path() string {
+	return pathFunc()
 }
 
 func DBPath() string {
@@ -37,13 +45,18 @@ func TokenPath() string {
 	return filepath.Join(Dir(), "token.json")
 }
 
+const defaultRedirectURL = "http://localhost:8484/callback"
+const defaultLowRecovery = 33.0
+const defaultHighStrain = 18.0
+const defaultAlertsEnabled = true
+
 func Load() (*Config, error) {
 	cfg := &Config{
-		RedirectURL: "http://localhost:8484/callback",
+		RedirectURL: defaultRedirectURL,
 		Alerts: Alerts{
-			LowRecovery: 33,
-			HighStrain:  18,
-			Enabled:     true,
+			LowRecovery: defaultLowRecovery,
+			HighStrain:  defaultHighStrain,
+			Enabled:     defaultAlertsEnabled,
 		},
 	}
 	data, err := os.ReadFile(Path())
@@ -57,7 +70,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.RedirectURL == "" {
-		cfg.RedirectURL = "http://localhost:8484/callback"
+		cfg.RedirectURL = defaultRedirectURL
 	}
 	return cfg, nil
 }
