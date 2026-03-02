@@ -94,7 +94,14 @@ func (s *Syncer) SyncFrom(start string) error {
 }
 
 func (s *Syncer) getSyncStart() string {
-	last, err := s.db.GetSyncState("cycles")
+	return GetSyncStartWithOverlap(s.db)
+}
+
+func GetSyncStartWithOverlap(db interface{ GetSyncState(string) (string, error) }) string {
+	if db == nil {
+		return ""
+	}
+	last, err := db.GetSyncState("cycles")
 	if err != nil || last == "" {
 		return ""
 	}
@@ -102,9 +109,14 @@ func (s *Syncer) getSyncStart() string {
 	if err != nil {
 		return ""
 	}
-	// 1-day overlap for retroactive updates
 	return t.Add(-24 * time.Hour).Format(time.RFC3339)
 }
+
+func FormatSyncTime(t time.Time) string {
+	return t.UTC().Format(time.RFC3339)
+}
+
+var syncEntities = []string{"cycles", "recoveries", "sleeps", "workouts"}
 
 func (s *Syncer) syncProfile() error {
 	p, err := s.client.GetProfile()

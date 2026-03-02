@@ -19,16 +19,6 @@ steps:
     commands:
       - go vet ./...
 
-  - name: coverage
-    image: golang:1.24
-    commands:
-      - go test ./... -coverprofile=coverage.out
-      - go install github.com/mattn/goveralls@latest
-      - goveralls -coverprofile=coverage.out -service=drone -reporter=golang
-    when:
-      - event: push
-        branch: [main]
-
   - name: build-snapshot
     image: golang:1.24
     commands:

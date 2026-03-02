@@ -1,9 +1,13 @@
 package sync
 
 import (
+	"errors"
 	"sync"
 	"testing"
+	"time"
 )
+
+var assertError = errors.New("assert error")
 
 func TestNew(t *testing.T) {
 	syncer := New(nil, nil, nil)
@@ -51,4 +55,68 @@ func TestSyncerProgress(t *testing.T) {
 func TestSyncerProgressNil(t *testing.T) {
 	s := &Syncer{onProgress: nil}
 	s.progress("test", 1)
+}
+
+func TestGetSyncStartWithOverlapNil(t *testing.T) {
+	result := GetSyncStartWithOverlap(nil)
+	if result != "" {
+		t.Errorf("GetSyncStartWithOverlap(nil) = %q, want empty", result)
+	}
+}
+
+type mockDBForSync struct {
+	syncState string
+	syncErr   error
+}
+
+func (m *mockDBForSync) GetSyncState(entity string) (string, error) {
+	return m.syncState, m.syncErr
+}
+
+func TestGetSyncStartWithOverlapEmpty(t *testing.T) {
+	db := &mockDBForSync{syncState: ""}
+	result := GetSyncStartWithOverlap(db)
+	if result != "" {
+		t.Errorf("GetSyncStartWithOverlap('') = %q, want empty", result)
+	}
+}
+
+func TestGetSyncStartWithOverlapError(t *testing.T) {
+	db := &mockDBForSync{syncErr: assertError}
+	result := GetSyncStartWithOverlap(db)
+	if result != "" {
+		t.Errorf("GetSyncStartWithOverlap(err) = %q, want empty", result)
+	}
+}
+
+func TestGetSyncStartWithOverlapValid(t *testing.T) {
+	db := &mockDBForSync{syncState: "2024-01-15T00:00:00Z"}
+	result := GetSyncStartWithOverlap(db)
+	expected := "2024-01-14T00:00:00Z"
+	if result != expected {
+		t.Errorf("GetSyncStartWithOverlap() = %q, want %q", result, expected)
+	}
+}
+
+func TestGetSyncStartWithOverlapInvalidTime(t *testing.T) {
+	db := &mockDBForSync{syncState: "not-a-time"}
+	result := GetSyncStartWithOverlap(db)
+	if result != "" {
+		t.Errorf("GetSyncStartWithOverlap(invalid) = %q, want empty", result)
+	}
+}
+
+func TestFormatSyncTime(t *testing.T) {
+	ts := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+	result := FormatSyncTime(ts)
+	expected := "2024-01-15T10:30:00Z"
+	if result != expected {
+		t.Errorf("FormatSyncTime() = %q, want %q", result, expected)
+	}
+}
+
+func TestSyncEntities(t *testing.T) {
+	if len(syncEntities) != 4 {
+		t.Errorf("len(syncEntities) = %d, want 4", len(syncEntities))
+	}
 }
