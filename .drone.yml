@@ -25,14 +25,16 @@ steps:
       - go mod download
       - go run github.com/goreleaser/goreleaser@v1.32.2 release --snapshot --clean
     when:
-      - event: tag
+      event:
+        - tag
 
   - name: publish
     image: alpine
     commands:
       - echo "Publishing release artifacts"
     when:
-      - event: tag
+      event:
+        - tag
 
 trigger:
   event:

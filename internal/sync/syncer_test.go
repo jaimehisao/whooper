@@ -120,3 +120,36 @@ func TestSyncEntities(t *testing.T) {
 		t.Errorf("len(syncEntities) = %d, want 4", len(syncEntities))
 	}
 }
+
+func TestSyncAll_NilClientDB(t *testing.T) {
+	s := &Syncer{}
+	err := s.SyncAll()
+	if err == nil {
+		t.Error("expected error with nil client")
+	}
+}
+
+func TestSyncFrom_NilClientDB(t *testing.T) {
+	s := &Syncer{}
+	err := s.SyncFrom("")
+	if err == nil {
+		t.Error("expected error with nil client")
+	}
+}
+
+func TestSyncFrom_Full(t *testing.T) {
+	s := &Syncer{}
+	err := s.SyncFrom("full")
+	if err == nil {
+		t.Error("expected error with nil client")
+	}
+}
+
+func TestSyncEntitiesList(t *testing.T) {
+	expected := []string{"cycles", "recoveries", "sleeps", "workouts"}
+	for i, e := range syncEntities {
+		if e != expected[i] {
+			t.Errorf("syncEntities[%d] = %s, want %s", i, e, expected[i])
+		}
+	}
+}
