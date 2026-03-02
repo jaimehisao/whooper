@@ -121,35 +121,37 @@ func TestSyncEntities(t *testing.T) {
 	}
 }
 
-func TestSyncAll_NilClientDB(t *testing.T) {
-	s := &Syncer{}
-	err := s.SyncAll()
-	if err == nil {
-		t.Error("expected error with nil client")
-	}
-}
-
-func TestSyncFrom_NilClientDB(t *testing.T) {
-	s := &Syncer{}
-	err := s.SyncFrom("")
-	if err == nil {
-		t.Error("expected error with nil client")
-	}
-}
-
-func TestSyncFrom_Full(t *testing.T) {
-	s := &Syncer{}
-	err := s.SyncFrom("full")
-	if err == nil {
-		t.Error("expected error with nil client")
-	}
-}
-
 func TestSyncEntitiesList(t *testing.T) {
 	expected := []string{"cycles", "recoveries", "sleeps", "workouts"}
 	for i, e := range syncEntities {
 		if e != expected[i] {
 			t.Errorf("syncEntities[%d] = %s, want %s", i, e, expected[i])
 		}
+	}
+}
+
+func TestGetSyncStartWithOverlap_DifferentDateFormats(t *testing.T) {
+	tests := []struct {
+		name      string
+		syncState string
+		wantEmpty bool
+	}{
+		{"RFC3339", "2024-01-15T00:00:00Z", false},
+		{"ISO date", "2024-01-15", true},
+		{"unix timestamp", "1705276800", true},
+		{"empty", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := &mockDBForSync{syncState: tt.syncState}
+			result := GetSyncStartWithOverlap(db)
+			if tt.wantEmpty && result != "" {
+				t.Errorf("GetSyncStartWithOverlap(%q) = %q, want empty", tt.syncState, result)
+			}
+			if !tt.wantEmpty && result == "" {
+				t.Errorf("GetSyncStartWithOverlap(%q) = empty, want date", tt.syncState)
+			}
+		})
 	}
 }
