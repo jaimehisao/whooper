@@ -133,3 +133,14 @@ func (m *mockTokenSource) Token() (*oauth2.Token, error) {
 	}
 	return m.token, nil
 }
+
+func TestLoadTokenInvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "invalid.json")
+	os.WriteFile(tokenPath, []byte("not valid json"), 0o600)
+
+	_, err := LoadToken(tokenPath)
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
