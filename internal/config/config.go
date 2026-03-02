@@ -37,12 +37,22 @@ func Path() string {
 	return pathFunc()
 }
 
-func DBPath() string {
+var dbPathFunc = func() string {
 	return filepath.Join(Dir(), "whooper.db")
+}
+
+func DBPath() string {
+	return dbPathFunc()
 }
 
 func TokenPath() string {
 	return filepath.Join(Dir(), "token.json")
+}
+
+func SetTestPaths(dir, cfgPath, dbPath string) {
+	dirFunc = func() string { return dir }
+	pathFunc = func() string { return cfgPath }
+	dbPathFunc = func() string { return dbPath }
 }
 
 const defaultRedirectURL = "http://localhost:8484/callback"
