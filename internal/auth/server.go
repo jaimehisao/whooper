@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"time"
@@ -15,6 +16,10 @@ import (
 )
 
 const oauthFlowTimeout = 5 * time.Minute
+const oauthServerAddr = "127.0.0.1:8484"
+const callbackPath = "/callback"
+
+var runtimeGOOS = runtime.GOOS
 
 // RunOAuthFlow performs the full OAuth2 authorization-code flow with PKCE:
 //  1. Generates a random state parameter and PKCE verifier.
@@ -23,6 +28,10 @@ const oauthFlowTimeout = 5 * time.Minute
 //  4. Waits for the callback, exchanges the code for a token.
 //  5. Shuts down the server and returns the token.
 func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
+	if err := validateRedirectURL(oauthCfg.RedirectURL); err != nil {
+		return nil, fmt.Errorf("invalid redirect URL: %w", err)
+	}
+
 	state, err := randomState()
 	if err != nil {
 		return nil, fmt.Errorf("generating state: %w", err)
@@ -38,12 +47,12 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 
 	mux := http.NewServeMux()
 	srv := &http.Server{
-		Addr:              ":8484",
+		Addr:              oauthServerAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(callbackPath, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("state") != state {
 			http.Error(w, "invalid state parameter", http.StatusBadRequest)
 			ch <- result{err: errors.New("state mismatch")}
@@ -77,7 +86,7 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 
 	// Open the browser to the authorization URL with PKCE.
 	authURL := oauthCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
-	fmt.Printf("Waiting for authorization on http://localhost:8484/callback...\n")
+	fmt.Printf("Waiting for authorization on http://%s%s...\n", oauthServerAddr, callbackPath)
 	if err := openBrowser(authURL); err != nil {
 		fmt.Printf("Open this URL in your browser:\n%s\n", authURL)
 	}
@@ -91,11 +100,38 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 	}
 
 	// Shut down the server.
-	if err := srv.Shutdown(context.Background()); err != nil {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return nil, fmt.Errorf("shutting down callback server: %w", err)
 	}
 
 	return res.token, res.err
+}
+
+func validateRedirectURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+	if u.Scheme != "http" {
+		return fmt.Errorf("redirect URL must use http")
+	}
+	host := u.Hostname()
+	if host != "localhost" && host != "127.0.0.1" {
+		return fmt.Errorf("redirect host must be localhost or 127.0.0.1")
+	}
+	port := u.Port()
+	if port == "" {
+		port = "80"
+	}
+	if port != "8484" {
+		return fmt.Errorf("redirect port must be 8484")
+	}
+	if u.Path != callbackPath {
+		return fmt.Errorf("redirect path must be %s", callbackPath)
+	}
+	return nil
 }
 
 func randomState() (string, error) {
@@ -106,17 +142,21 @@ func randomState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func openBrowser(url string) error {
+func openBrowser(rawURL string) error {
+	if _, err := url.ParseRequestURI(rawURL); err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+
 	var cmd *exec.Cmd
-	switch runtime.GOOS {
+	switch runtimeGOOS {
 	case "linux":
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", rawURL)
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", rawURL)
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL)
 	default:
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		return fmt.Errorf("unsupported platform: %s", runtimeGOOS)
 	}
 	return cmd.Start()
 }
