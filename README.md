@@ -381,6 +381,31 @@ All data is stored in `~/.whooper/`:
 | `token.json` | OAuth2 access/refresh tokens |
 | `whooper.db` | SQLite database |
 
+## Operations
+
+### Supported Runtime
+
+- Go `1.24.x` is the primary development and CI target.
+- Linux, macOS, and Windows artifacts are produced through GoReleaser.
+
+### Failure Modes and Recovery
+
+- **OAuth/login failure**: rerun `whooper login`; verify `client-id`, `client-secret`, and redirect URL in `whooper config`.
+- **API/rate-limit failure**: rerun `whooper sync`; the syncer uses retries and incremental sync with overlap.
+- **Partial sync failure**: no sync-state checkpoint is persisted when sync fails, so rerunning is safe.
+- **Local DB issues**: move or back up `~/.whooper/whooper.db` and run sync again to rebuild data.
+
+### Backup and Restore
+
+- Backup: copy `~/.whooper/config.yaml`, `~/.whooper/token.json`, and `~/.whooper/whooper.db`.
+- Restore: place files back in `~/.whooper/` with permissions `0700` on directory and `0600` on files.
+
+### Security Notes
+
+- Credentials and tokens are stored on local disk only.
+- Secret/token files should never be committed; `.gitignore` and CI secret scanning are configured to help prevent leaks.
+- Report suspected vulnerabilities using `SECURITY.md`.
+
 ## Dependencies
 
 | Package | Purpose |
