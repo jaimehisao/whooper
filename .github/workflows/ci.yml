@@ -10,6 +10,9 @@ on:
 
 env:
   GO_VERSION: "1.24"
+  STATICCHECK_VERSION: "2025.1"
+  GOVULNCHECK_VERSION: "v1.1.4"
+  CRITICAL_COVERAGE_MIN: "80"
 
 jobs:
   test:
@@ -30,16 +33,18 @@ jobs:
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.out
 
+      - name: Enforce critical package coverage
+        run: |
+          go test ./internal/analysis ./internal/api ./internal/store ./internal/sync ./internal/tui/components -coverprofile=coverage-critical.out
+          COVER=$(go tool cover -func=coverage-critical.out | awk '/^total:/ {gsub("%", "", $3); print $3}')
+          echo "Critical package coverage: ${COVER}%"
+          awk -v c="$COVER" -v min="${{ env.CRITICAL_COVERAGE_MIN }}" 'BEGIN { if (c+0 < min+0) { exit 1 } }'
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.out
-
-      - name: Check coverage
-        run: |
-          go install github.com/mattn/goveralls@latest
-          goveralls -coverprofile=coverage.out -service=github-actions -reporter=lcov || true
 
   lint:
     name: Lint
@@ -58,8 +63,13 @@ jobs:
 
       - name: Run staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install honnef.co/go/tools/cmd/staticcheck@${{ env.STATICCHECK_VERSION }}
           staticcheck ./...
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+          govulncheck ./...
 
   build:
     name: Build
