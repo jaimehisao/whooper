@@ -71,6 +71,11 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
           govulncheck ./...
 
+      - name: Run gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build
     runs-on: ubuntu-latest

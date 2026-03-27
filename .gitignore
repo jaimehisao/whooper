@@ -1,2 +1,8 @@
 whooper
 *.db
+coverage.out
+
+# Local app secrets and tokens
+.whooper/
+config.yaml
+token.json

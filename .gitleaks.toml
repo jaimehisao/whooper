@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow local non-secret test fixtures"
+paths = [
+  '''coverage\.out'''
+]
