@@ -66,3 +66,21 @@ func TestSparkline_WidthZero(t *testing.T) {
 		t.Errorf("expected empty string for width 0, got %q", result)
 	}
 }
+
+func TestSparkline_DownsampleLength(t *testing.T) {
+	result := Sparkline([]float64{1, 2, 3, 4, 5, 6}, 3)
+	if len([]rune(result)) != 3 {
+		t.Fatalf("expected 3 runes after downsample, got %d", len([]rune(result)))
+	}
+}
+
+func TestDownsample(t *testing.T) {
+	input := []float64{1, 2, 3, 4, 5, 6}
+	out := downsample(input, 3)
+	if len(out) != 3 {
+		t.Fatalf("len(out) = %d, want 3", len(out))
+	}
+	if out[0] != 1.5 || out[1] != 3.5 || out[2] != 5.5 {
+		t.Fatalf("unexpected values: %v", out)
+	}
+}

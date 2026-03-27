@@ -1,6 +1,10 @@
 package store
 
-import "testing"
+import (
+	"testing"
+
+	"git.infra.hisao.org/hisao/whooper/internal/models"
+)
 
 func TestMetricColumn(t *testing.T) {
 	tests := []struct {
@@ -53,5 +57,106 @@ func TestDateColumn(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("dateColumn(%q) = %q, want %q", tt.table, got, tt.want)
 		}
+	}
+}
+
+func TestGetSleepTrend(t *testing.T) {
+	db := openTestDB(t)
+
+	err := db.SaveSleeps([]models.Sleep{
+		{
+			ID: 1, UserID: 1,
+			CreatedAt:  "2024-01-15T00:00:00Z",
+			UpdatedAt:  "2024-01-15T07:00:00Z",
+			Start:      "2024-01-15T00:00:00Z",
+			End:        "2024-01-15T07:00:00Z",
+			Nap:        false,
+			ScoreState: "SCORED",
+			Score: &models.SleepScore{
+				StageSummary: models.SleepStageSummary{
+					TotalInBedTimeMilli: 28800000,
+					TotalAwakeTimeMilli: 3600000,
+				},
+				SleepEfficiencyPct:  90,
+				SleepPerformancePct: 88,
+				SleepConsistencyPct: 85,
+			},
+		},
+		{
+			ID: 2, UserID: 1,
+			CreatedAt:  "2024-01-15T12:00:00Z",
+			UpdatedAt:  "2024-01-15T12:30:00Z",
+			Start:      "2024-01-15T12:00:00Z",
+			End:        "2024-01-15T12:30:00Z",
+			Nap:        true,
+			ScoreState: "SCORED",
+			Score: &models.SleepScore{
+				StageSummary: models.SleepStageSummary{
+					TotalInBedTimeMilli: 1800000,
+					TotalAwakeTimeMilli: 300000,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SaveSleeps error = %v", err)
+	}
+
+	points, err := db.GetSleepTrend("2024-01-01", "2024-12-31")
+	if err != nil {
+		t.Fatalf("GetSleepTrend error = %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("len(points) = %d, want 1", len(points))
+	}
+	if points[0].DurationMilli != 25200000 {
+		t.Fatalf("DurationMilli = %d, want 25200000", points[0].DurationMilli)
+	}
+}
+
+func TestGetCorrelationDataAcrossTablesAndErrors(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := db.SaveRecoveries([]models.Recovery{{
+		CycleID: 1, UserID: 1,
+		CreatedAt:  "2024-01-15T06:00:00Z",
+		UpdatedAt:  "2024-01-15T06:00:00Z",
+		ScoreState: "SCORED",
+		Score:      &models.RecoveryScore{RecoveryScore: 75},
+	}}); err != nil {
+		t.Fatalf("SaveRecoveries error = %v", err)
+	}
+
+	if err := db.SaveSleeps([]models.Sleep{{
+		ID: 1, UserID: 1,
+		CreatedAt:  "2024-01-15T00:00:00Z",
+		UpdatedAt:  "2024-01-15T06:00:00Z",
+		Start:      "2024-01-15T00:00:00Z",
+		End:        "2024-01-15T06:00:00Z",
+		Nap:        false,
+		ScoreState: "SCORED",
+		Score: &models.SleepScore{
+			StageSummary: models.SleepStageSummary{
+				TotalInBedTimeMilli: 28800000,
+				TotalAwakeTimeMilli: 3600000,
+			},
+		},
+	}}); err != nil {
+		t.Fatalf("SaveSleeps error = %v", err)
+	}
+
+	points, err := db.GetCorrelationData("recovery", "sleep_efficiency")
+	if err != nil {
+		t.Fatalf("GetCorrelationData cross table error = %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("len(points) = %d, want 1", len(points))
+	}
+
+	if _, err := db.GetCorrelationData("invalid", "sleep_efficiency"); err == nil {
+		t.Fatal("expected error for invalid X metric")
+	}
+	if _, err := db.GetCorrelationData("recovery", "invalid"); err == nil {
+		t.Fatal("expected error for invalid Y metric")
 	}
 }
