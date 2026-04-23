@@ -160,3 +160,67 @@ func TestGetCorrelationDataAcrossTablesAndErrors(t *testing.T) {
 		t.Fatal("expected error for invalid Y metric")
 	}
 }
+
+func TestGetCorrelationDataAcrossTablesDailyAggregation(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := db.SaveRecoveries([]models.Recovery{
+		{
+			CycleID:    1,
+			UserID:     1,
+			CreatedAt:  "2024-01-15T01:00:00Z",
+			UpdatedAt:  "2024-01-15T01:00:00Z",
+			ScoreState: "SCORED",
+			Score:      &models.RecoveryScore{RecoveryScore: 60},
+		},
+		{
+			CycleID:    2,
+			UserID:     1,
+			CreatedAt:  "2024-01-15T12:00:00Z",
+			UpdatedAt:  "2024-01-15T12:00:00Z",
+			ScoreState: "SCORED",
+			Score:      &models.RecoveryScore{RecoveryScore: 80},
+		},
+	}); err != nil {
+		t.Fatalf("SaveRecoveries error = %v", err)
+	}
+
+	if err := db.SaveCycles([]models.Cycle{
+		{
+			ID:         1,
+			UserID:     1,
+			CreatedAt:  "2024-01-15T06:00:00Z",
+			UpdatedAt:  "2024-01-15T06:00:00Z",
+			Start:      "2024-01-15T06:00:00Z",
+			End:        "2024-01-15T07:00:00Z",
+			ScoreState: "SCORED",
+			Score:      &models.CycleScore{Strain: 10},
+		},
+		{
+			ID:         2,
+			UserID:     1,
+			CreatedAt:  "2024-01-15T18:00:00Z",
+			UpdatedAt:  "2024-01-15T18:00:00Z",
+			Start:      "2024-01-15T18:00:00Z",
+			End:        "2024-01-15T19:00:00Z",
+			ScoreState: "SCORED",
+			Score:      &models.CycleScore{Strain: 14},
+		},
+	}); err != nil {
+		t.Fatalf("SaveCycles error = %v", err)
+	}
+
+	points, err := db.GetCorrelationData("recovery", "strain")
+	if err != nil {
+		t.Fatalf("GetCorrelationData error = %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("len(points) = %d, want 1", len(points))
+	}
+	if points[0].X != 70 {
+		t.Fatalf("aggregated recovery = %v, want 70", points[0].X)
+	}
+	if points[0].Y != 12 {
+		t.Fatalf("aggregated strain = %v, want 12", points[0].Y)
+	}
+}

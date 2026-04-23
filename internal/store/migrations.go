@@ -134,13 +134,26 @@ func (db *DB) migrate() error {
 		if m.version <= currentVersion {
 			continue
 		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin migration v%d: %w", m.version, err)
+		}
+
 		for _, stmt := range m.statements {
-			if _, err := db.Exec(stmt); err != nil {
+			if _, err := tx.Exec(stmt); err != nil {
+				_ = tx.Rollback()
 				return fmt.Errorf("migration v%d: %w", m.version, err)
 			}
 		}
-		if _, err := db.Exec(`INSERT INTO schema_version (version) VALUES (?)`, m.version); err != nil {
+
+		if _, err := tx.Exec(`INSERT INTO schema_version (version) VALUES (?)`, m.version); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("record migration v%d: %w", m.version, err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration v%d: %w", m.version, err)
 		}
 	}
 	return nil

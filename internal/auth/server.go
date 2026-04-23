@@ -21,6 +21,13 @@ const callbackPath = "/callback"
 
 var runtimeGOOS = runtime.GOOS
 
+type oauthResult struct {
+	token *oauth2.Token
+	err   error
+}
+
+type tokenExchanger func(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error)
+
 // RunOAuthFlow performs the full OAuth2 authorization-code flow with PKCE:
 //  1. Generates a random state parameter and PKCE verifier.
 //  2. Starts a local HTTP server on :8484 to receive the callback.
@@ -39,11 +46,7 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 
 	verifier := oauth2.GenerateVerifier()
 
-	type result struct {
-		token *oauth2.Token
-		err   error
-	}
-	ch := make(chan result, 1)
+	ch := make(chan oauthResult, 1)
 
 	mux := http.NewServeMux()
 	srv := &http.Server{
@@ -53,34 +56,13 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 	}
 
 	mux.HandleFunc(callbackPath, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("state") != state {
-			http.Error(w, "invalid state parameter", http.StatusBadRequest)
-			ch <- result{err: errors.New("state mismatch")}
-			return
-		}
-
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			http.Error(w, "missing code parameter", http.StatusBadRequest)
-			ch <- result{err: errors.New("missing authorization code")}
-			return
-		}
-
-		token, err := oauthCfg.Exchange(r.Context(), code, oauth2.VerifierOption(verifier))
-		if err != nil {
-			http.Error(w, "token exchange failed", http.StatusInternalServerError)
-			ch <- result{err: fmt.Errorf("exchanging code: %w", err)}
-			return
-		}
-
-		fmt.Fprint(w, "<html><body><h1>Authorization successful!</h1><p>You may close this window.</p></body></html>")
-		ch <- result{token: token}
+		handleOAuthCallback(w, r, state, verifier, oauthCfg.Exchange, ch)
 	})
 
 	// Start the server in a goroutine.
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			ch <- result{err: fmt.Errorf("callback server: %w", err)}
+			sendOAuthResult(ch, oauthResult{err: fmt.Errorf("callback server: %w", err)})
 		}
 	}()
 
@@ -92,11 +74,11 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 	}
 
 	// Wait for the callback result with a timeout.
-	var res result
+	var res oauthResult
 	select {
 	case res = <-ch:
 	case <-time.After(oauthFlowTimeout):
-		res = result{err: errors.New("authorization timed out after 5 minutes")}
+		res = oauthResult{err: errors.New("authorization timed out after 5 minutes")}
 	}
 
 	// Shut down the server.
@@ -107,6 +89,42 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 	}
 
 	return res.token, res.err
+}
+
+func handleOAuthCallback(w http.ResponseWriter, r *http.Request, state, verifier string, exchange tokenExchanger, ch chan oauthResult) {
+	if r.URL.Query().Get("state") != state {
+		http.Error(w, "invalid state parameter", http.StatusBadRequest)
+		sendOAuthResult(ch, oauthResult{err: errors.New("state mismatch")})
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "missing code parameter", http.StatusBadRequest)
+		sendOAuthResult(ch, oauthResult{err: errors.New("missing authorization code")})
+		return
+	}
+
+	token, err := exchange(r.Context(), code, oauth2.VerifierOption(verifier))
+	if err != nil {
+		http.Error(w, "token exchange failed", http.StatusInternalServerError)
+		sendOAuthResult(ch, oauthResult{err: fmt.Errorf("exchanging code: %w", err)})
+		return
+	}
+
+	fmt.Fprint(w, "<html><body><h1>Authorization successful!</h1><p>You may close this window.</p></body></html>")
+	sendOAuthResult(ch, oauthResult{token: token})
+}
+
+func sendOAuthResult(ch chan oauthResult, res oauthResult) {
+	select {
+	case ch <- res:
+	default:
+	}
+}
+
+func ValidateRedirectURL(raw string) error {
+	return validateRedirectURL(raw)
 }
 
 func validateRedirectURL(raw string) error {

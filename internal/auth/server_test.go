@@ -1,8 +1,15 @@
 package auth
 
 import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+
+	"golang.org/x/oauth2"
 )
 
 func TestValidateRedirectURL(t *testing.T) {
@@ -79,5 +86,107 @@ func TestOpenBrowserLinuxMissingBinary(t *testing.T) {
 	err := openBrowser("http://localhost:8484/callback")
 	if err == nil {
 		t.Fatal("expected command start error when xdg-open is missing")
+	}
+}
+
+func TestHandleOAuthCallbackStateMismatch(t *testing.T) {
+	ch := make(chan oauthResult, 1)
+	req := httptest.NewRequest(http.MethodGet, "/callback?state=wrong&code=abc", nil)
+	rr := httptest.NewRecorder()
+
+	handleOAuthCallback(rr, req, "expected", "verifier", func(context.Context, string, ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+		t.Fatal("exchange should not be called")
+		return nil, nil
+	}, ch)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	if got := (<-ch).err; got == nil || got.Error() != "state mismatch" {
+		t.Fatalf("unexpected channel error: %v", got)
+	}
+}
+
+func TestHandleOAuthCallbackMissingCode(t *testing.T) {
+	ch := make(chan oauthResult, 1)
+	req := httptest.NewRequest(http.MethodGet, "/callback?state=expected", nil)
+	rr := httptest.NewRecorder()
+
+	handleOAuthCallback(rr, req, "expected", "verifier", func(context.Context, string, ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+		t.Fatal("exchange should not be called")
+		return nil, nil
+	}, ch)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	if got := (<-ch).err; got == nil || got.Error() != "missing authorization code" {
+		t.Fatalf("unexpected channel error: %v", got)
+	}
+}
+
+func TestHandleOAuthCallbackExchangeFailure(t *testing.T) {
+	ch := make(chan oauthResult, 1)
+	req := httptest.NewRequest(http.MethodGet, "/callback?state=expected&code=abc", nil)
+	rr := httptest.NewRecorder()
+
+	handleOAuthCallback(rr, req, "expected", "verifier", func(context.Context, string, ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+		return nil, errors.New("exchange failed")
+	}, ch)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+	if got := (<-ch).err; got == nil || !strings.Contains(got.Error(), "exchanging code") {
+		t.Fatalf("unexpected channel error: %v", got)
+	}
+}
+
+func TestHandleOAuthCallbackSuccess(t *testing.T) {
+	ch := make(chan oauthResult, 1)
+	req := httptest.NewRequest(http.MethodGet, "/callback?state=expected&code=abc", nil)
+	rr := httptest.NewRecorder()
+	want := &oauth2.Token{AccessToken: "token123"}
+
+	handleOAuthCallback(rr, req, "expected", "verifier", func(context.Context, string, ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+		return want, nil
+	}, ch)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	res := <-ch
+	if res.err != nil {
+		t.Fatalf("unexpected error: %v", res.err)
+	}
+	if res.token == nil || res.token.AccessToken != want.AccessToken {
+		t.Fatalf("unexpected token: %#v", res.token)
+	}
+}
+
+func TestHandleOAuthCallbackSecondCallbackDoesNotBlock(t *testing.T) {
+	ch := make(chan oauthResult, 1)
+	firstReq := httptest.NewRequest(http.MethodGet, "/callback?state=expected&code=one", nil)
+	firstRR := httptest.NewRecorder()
+
+	handleOAuthCallback(firstRR, firstReq, "expected", "verifier", func(context.Context, string, ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "one"}, nil
+	}, ch)
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/callback?state=expected&code=two", nil)
+	secondRR := httptest.NewRecorder()
+	handleOAuthCallback(secondRR, secondReq, "expected", "verifier", func(context.Context, string, ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "two"}, nil
+	}, ch)
+
+	res := <-ch
+	if res.token == nil || res.token.AccessToken != "one" {
+		t.Fatalf("expected first callback result, got %#v", res)
+	}
+}
+
+func TestValidateRedirectURLExported(t *testing.T) {
+	if err := ValidateRedirectURL("http://localhost:8484/callback"); err != nil {
+		t.Fatalf("ValidateRedirectURL error = %v", err)
 	}
 }

@@ -15,19 +15,19 @@ type RecoveryTrendPoint struct {
 
 // SleepTrendPoint holds a single day's sleep trend data.
 type SleepTrendPoint struct {
-	Date               string
-	DurationMilli      int
-	EfficiencyPct      float64
-	PerformancePct     float64
-	ConsistencyPct     float64
+	Date           string
+	DurationMilli  int
+	EfficiencyPct  float64
+	PerformancePct float64
+	ConsistencyPct float64
 }
 
 // StrainTrendPoint holds a single day's strain trend data.
 type StrainTrendPoint struct {
-	Date          string
-	Strain        float64
-	MaxHeartRate  int
-	Kilojoule     float64
+	Date         string
+	Strain       float64
+	MaxHeartRate int
+	Kilojoule    float64
 }
 
 // CorrelationPoint holds a pair of metric values for correlation analysis.
@@ -150,13 +150,23 @@ func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, e
 			colX, colY, tableX)
 	} else {
 		query = fmt.Sprintf(
-			`SELECT a.%s, b.%s
-			FROM %s a
-			JOIN %s b ON date(a.%s) = date(b.%s)
-			WHERE a.score_state = 'SCORED' AND b.score_state = 'SCORED'`,
-			colX, colY,
-			tableX, tableY,
-			dateColumn(tableX), dateColumn(tableY),
+			`WITH a_daily AS (
+				SELECT date(%s) AS d, AVG(%s) AS x
+				FROM %s
+				WHERE score_state = 'SCORED'
+				GROUP BY date(%s)
+			),
+			b_daily AS (
+				SELECT date(%s) AS d, AVG(%s) AS y
+				FROM %s
+				WHERE score_state = 'SCORED'
+				GROUP BY date(%s)
+			)
+			SELECT a_daily.x, b_daily.y
+			FROM a_daily
+			JOIN b_daily ON a_daily.d = b_daily.d`,
+			dateColumn(tableX), colX, tableX, dateColumn(tableX),
+			dateColumn(tableY), colY, tableY, dateColumn(tableY),
 		)
 	}
 
