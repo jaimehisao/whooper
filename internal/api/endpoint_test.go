@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"git.infra.hisao.org/hisao/whooper/internal/models"
 )
 
 func TestGetProfile_Success(t *testing.T) {
@@ -34,6 +36,20 @@ func TestGetProfile_Success(t *testing.T) {
 func TestGetProfile_Error(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	_, err := client.GetProfile()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestGetProfile_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
@@ -106,4 +122,41 @@ func TestGetWorkouts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWorkouts error = %v", err)
 	}
+}
+
+func TestForEachEndpoints(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"records": []interface{}{map[string]interface{}{"id": 1}},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+
+	t.Run("Cycles", func(t *testing.T) {
+		err := client.ForEachCycle("", "", func(records []models.Cycle) error { return nil })
+		if err != nil {
+			t.Errorf("ForEachCycle error = %v", err)
+		}
+	})
+	t.Run("Recoveries", func(t *testing.T) {
+		err := client.ForEachRecovery("", "", func(records []models.Recovery) error { return nil })
+		if err != nil {
+			t.Errorf("ForEachRecovery error = %v", err)
+		}
+	})
+	t.Run("Sleeps", func(t *testing.T) {
+		err := client.ForEachSleep("", "", func(records []models.Sleep) error { return nil })
+		if err != nil {
+			t.Errorf("ForEachSleep error = %v", err)
+		}
+	})
+	t.Run("Workouts", func(t *testing.T) {
+		err := client.ForEachWorkout("", "", func(records []models.Workout) error { return nil })
+		if err != nil {
+			t.Errorf("ForEachWorkout error = %v", err)
+		}
+	})
 }

@@ -144,3 +144,25 @@ func TestLoadTokenInvalidJSON(t *testing.T) {
 		t.Error("expected error for invalid JSON")
 	}
 }
+
+func TestSaveTokenError(t *testing.T) {
+	err := SaveToken("/nonexistent/dir/token.json", &oauth2.Token{})
+	if err == nil {
+		t.Error("expected error when saving to nonexistent directory")
+	}
+}
+
+func TestPersistingTokenSource_SaveError(t *testing.T) {
+	token := &oauth2.Token{AccessToken: "abc"}
+	src := &mockTokenSource{token: token}
+	// / is a directory, cannot write file to it
+	persisting := PersistingTokenSource("/", src)
+
+	got, err := persisting.Token()
+	if err != nil {
+		t.Fatalf("Token() error = %v, expected no error even if save fails", err)
+	}
+	if got.AccessToken != "abc" {
+		t.Errorf("got %s, want abc", got.AccessToken)
+	}
+}

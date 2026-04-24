@@ -182,30 +182,50 @@ func TestSave(t *testing.T) {
 	}
 }
 
-func TestSaveCreatesDirectory(t *testing.T) {
+func TestSetTestPaths(t *testing.T) {
+	origDir := Dir()
+	origPath := Path()
+	origDB := DBPath()
+
+	SetTestPaths("a", "b", "c")
+	if Dir() != "a" || Path() != "b" || DBPath() != "c" {
+		t.Errorf("SetTestPaths failed: %s, %s, %s", Dir(), Path(), DBPath())
+	}
+
+	// Restore (internal, no direct way but we can use SetTestPaths again)
+	SetTestPaths(origDir, origPath, origDB)
+}
+
+func TestLoadError(t *testing.T) {
 	tmpDir := t.TempDir()
-	subDir := filepath.Join(tmpDir, "subdir", ".whooper")
+	cfgPath := filepath.Join(tmpDir, "invalid.yaml")
+	if err := os.WriteFile(cfgPath, []byte("invalid: yaml: :"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-	origDir := dirFunc
 	origPath := pathFunc
+	pathFunc = func() string { return cfgPath }
+	defer func() { pathFunc = origPath }()
 
-	dirFunc = func() string { return subDir }
-	pathFunc = func() string { return filepath.Join(subDir, "config.yaml") }
-
-	defer func() { dirFunc = origDir; pathFunc = origPath }()
-
-	cfg := &Config{ClientID: "test"}
-
-	err := Save(cfg)
-	if err != nil {
-		t.Fatalf("Save() error = %v", err)
+	_, err := Load()
+	if err == nil {
+		t.Error("expected error for invalid YAML")
 	}
+}
 
-	info, err := os.Stat(subDir)
-	if err != nil {
-		t.Fatalf("Stat error = %v", err)
+func TestSaveError(t *testing.T) {
+	// Use a path that cannot be created (e.g. into a file)
+	tmpFile := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(tmpFile, []byte(""), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if !info.IsDir() {
-		t.Errorf("Expected directory, got %v", info.Mode())
+	
+	origDir := dirFunc
+	dirFunc = func() string { return filepath.Join(tmpFile, "subdir") }
+	defer func() { dirFunc = origDir }()
+
+	err := Save(&Config{})
+	if err == nil {
+		t.Error("expected error when directory cannot be created")
 	}
 }

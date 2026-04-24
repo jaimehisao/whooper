@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var oauthFlowFunc = auth.RunOAuthFlow
+
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with the Whoop API via OAuth2",
@@ -21,7 +23,7 @@ var loginCmd = &cobra.Command{
 		}
 
 		oauthCfg := auth.OAuthConfig(cfg)
-		token, err := auth.RunOAuthFlow(oauthCfg)
+		token, err := oauthFlowFunc(oauthCfg)
 		if err != nil {
 			return fmt.Errorf("oauth flow: %w", err)
 		}

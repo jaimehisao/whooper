@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -188,5 +189,24 @@ func TestHandleOAuthCallbackSecondCallbackDoesNotBlock(t *testing.T) {
 func TestValidateRedirectURLExported(t *testing.T) {
 	if err := ValidateRedirectURL("http://localhost:8484/callback"); err != nil {
 		t.Fatalf("ValidateRedirectURL error = %v", err)
+	}
+}
+
+func TestRunOAuthFlow_Timeout(t *testing.T) {
+	origTimeout := oauthFlowTimeout
+	oauthFlowTimeout = 10 * time.Millisecond
+	defer func() { oauthFlowTimeout = origTimeout }()
+
+	origOpenBrowser := openBrowserFunc
+	openBrowserFunc = func(string) error { return nil }
+	defer func() { openBrowserFunc = origOpenBrowser }()
+
+	conf := &oauth2.Config{RedirectURL: "http://localhost:8484/callback"}
+	_, err := RunOAuthFlow(conf)
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

@@ -67,8 +67,30 @@ func TestFormatRecoverySparkline(t *testing.T) {
 	if result == "" {
 		t.Error("expected non-empty sparkline")
 	}
+	
+	// Small width
+	result = FormatRecoverySparkline(data, 5)
 	if len(result) == 0 {
-		t.Error("expected sparkline to have length")
+		t.Error("expected sparkline even with small width")
+	}
+
+	// All same values
+	result = FormatRecoverySparkline([]float64{50, 50, 50}, 10)
+	if len(result) == 0 {
+		t.Error("expected sparkline for same values")
+	}
+}
+
+func TestMinMaxAverage_Single(t *testing.T) {
+	data := []float64{42}
+	if minFloat(data) != 42 {
+		t.Error("min single failed")
+	}
+	if maxFloat(data) != 42 {
+		t.Error("max single failed")
+	}
+	if averageFloat(data) != 42 {
+		t.Error("average single failed")
 	}
 }
 

@@ -105,6 +105,45 @@ func TestFetchAll_EmptyRecords(t *testing.T) {
 	}
 }
 
+func TestFetchPaginated(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Query().Get("nextToken") == "" {
+			resp := paginatedResponse[testItem]{
+				Records:   []testItem{{ID: 1, Name: "p1"}},
+				NextToken: "p2",
+			}
+			json.NewEncoder(w).Encode(resp)
+		} else {
+			resp := paginatedResponse[testItem]{
+				Records: []testItem{{ID: 2, Name: "p2"}},
+			}
+			json.NewEncoder(w).Encode(resp)
+		}
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	var captured []testItem
+	err := FetchPaginated[testItem](client, "/items", nil, func(records []testItem) error {
+		captured = append(captured, records...)
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("FetchPaginated: %v", err)
+	}
+	if len(captured) != 2 {
+		t.Errorf("expected 2 items, got %d", len(captured))
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 calls, got %d", callCount)
+	}
+}
+
 func TestFetchAll_ServerError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

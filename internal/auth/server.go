@@ -15,11 +15,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const oauthFlowTimeout = 5 * time.Minute
+var oauthFlowTimeout = 5 * time.Minute
 const oauthServerAddr = "127.0.0.1:8484"
 const callbackPath = "/callback"
 
 var runtimeGOOS = runtime.GOOS
+var openBrowserFunc = openBrowser
 
 type oauthResult struct {
 	token *oauth2.Token
@@ -69,7 +70,7 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 	// Open the browser to the authorization URL with PKCE.
 	authURL := oauthCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
 	fmt.Printf("Waiting for authorization on http://%s%s...\n", oauthServerAddr, callbackPath)
-	if err := openBrowser(authURL); err != nil {
+	if err := openBrowserFunc(authURL); err != nil {
 		fmt.Printf("Open this URL in your browser:\n%s\n", authURL)
 	}
 

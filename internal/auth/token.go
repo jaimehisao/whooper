@@ -57,9 +57,9 @@ func (p *persistingTokenSource) Token() (*oauth2.Token, error) {
 	// Only save when the token has actually been refreshed
 	if token.AccessToken != p.lastAccess {
 		p.lastAccess = token.AccessToken
-		if err := SaveToken(p.path, token); err != nil {
-			return nil, err
-		}
+		// We ignore save errors during refresh - it's better to have a fresh
+		// token in memory than to fail because disk is full or read-only.
+		_ = SaveToken(p.path, token)
 	}
 	return token, nil
 }

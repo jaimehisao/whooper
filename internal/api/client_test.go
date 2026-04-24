@@ -51,7 +51,7 @@ func TestNewClientRetryAfterParsing(t *testing.T) {
 		header string
 		want   time.Duration
 	}{
-		{name: "valid", header: "10", want: 10 * time.Second},
+		{name: "valid", header: "1", want: 1 * time.Second},
 		{name: "invalid", header: "abc", want: 0},
 	}
 
@@ -86,7 +86,7 @@ func TestNewClientRetryAfterParsing(t *testing.T) {
 			}
 
 			if tt.want > 0 {
-				if elapsed < tt.want-2*time.Second {
+				if elapsed < tt.want-500*time.Millisecond {
 					t.Fatalf("elapsed %v shorter than expected wait %v", elapsed, tt.want)
 				}
 			} else {
