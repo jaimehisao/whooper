@@ -18,6 +18,7 @@ var workoutRanges = []int{7, 14, 30, 90}
 type WorkoutsModel struct {
 	db       *store.DB
 	width    int
+	height   int
 	rangeIdx int
 	workouts []models.Workout
 	cursor   int
@@ -27,7 +28,7 @@ type WorkoutsModel struct {
 }
 
 func NewWorkouts(db *store.DB) WorkoutsModel {
-	return WorkoutsModel{db: db, rangeIdx: 2, width: 80}
+	return WorkoutsModel{db: db, rangeIdx: 2, width: 80, height: 24}
 }
 
 type workoutsDataMsg struct {
@@ -65,6 +66,7 @@ func (m *WorkoutsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
@@ -118,6 +120,30 @@ func (m *WorkoutsModel) View() string {
 		return m.detailView()
 	}
 
+	// Virtualization: calculate viewport
+	// Reserved height for header, footer, table headers etc.
+	reservedHeight := 8
+	if m.err != "" {
+		reservedHeight++
+	}
+	viewHeight := m.height - reservedHeight
+	if viewHeight < 1 {
+		viewHeight = 1
+	}
+
+	startIdx := 0
+	if m.cursor >= viewHeight {
+		startIdx = m.cursor - viewHeight + 1
+	}
+	endIdx := startIdx + viewHeight
+	if endIdx > len(m.workouts) {
+		endIdx = len(m.workouts)
+		startIdx = endIdx - viewHeight
+		if startIdx < 0 {
+			startIdx = 0
+		}
+	}
+
 	// Responsive column widths
 	sportW := 20
 	if m.width < 90 {
@@ -127,7 +153,8 @@ func (m *WorkoutsModel) View() string {
 	widths := []int{12, sportW, 8, 8, 8, 10}
 
 	var rows [][]string
-	for _, w := range m.workouts {
+	for i := startIdx; i < endIdx; i++ {
+		w := m.workouts[i]
 		sport := models.SportName[w.SportID]
 		if sport == "" {
 			sport = fmt.Sprintf("Sport %d", w.SportID)
@@ -145,9 +172,9 @@ func (m *WorkoutsModel) View() string {
 		})
 	}
 
-	table := components.HighlightedTable(headers, rows, widths, m.cursor)
+	table := components.HighlightedTable(headers, rows, widths, m.cursor-startIdx)
 	sections = append(sections, table)
-	sections = append(sections, tui.MutedStyle.Render("  ↑↓ navigate  enter detail  esc back"))
+	sections = append(sections, tui.MutedStyle.Render(fmt.Sprintf("  ↑↓ navigate (%d/%d)  enter detail  esc back", m.cursor+1, len(m.workouts))))
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
