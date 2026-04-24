@@ -58,6 +58,11 @@ func (db *DB) GetRecoveryTrend(from, to string) ([]RecoveryTrendPoint, error) {
 	defer rows.Close()
 
 	var points []RecoveryTrendPoint
+	if from != "" && to == "" {
+		// Heuristic: for typical trend views (7-90 days), pre-allocate a bit more than a month
+		points = make([]RecoveryTrendPoint, 0, 90)
+	}
+
 	for rows.Next() {
 		var p RecoveryTrendPoint
 		if err := rows.Scan(&p.Date, &p.RecoveryScore, &p.HRV, &p.RHR); err != nil {
@@ -92,6 +97,10 @@ func (db *DB) GetSleepTrend(from, to string) ([]SleepTrendPoint, error) {
 	defer rows.Close()
 
 	var points []SleepTrendPoint
+	if from != "" && to == "" {
+		points = make([]SleepTrendPoint, 0, 90)
+	}
+
 	for rows.Next() {
 		var p SleepTrendPoint
 		if err := rows.Scan(&p.Date, &p.DurationMilli, &p.EfficiencyPct, &p.PerformancePct, &p.ConsistencyPct); err != nil {
@@ -124,6 +133,10 @@ func (db *DB) GetStrainTrend(from, to string) ([]StrainTrendPoint, error) {
 	defer rows.Close()
 
 	var points []StrainTrendPoint
+	if from != "" && to == "" {
+		points = make([]StrainTrendPoint, 0, 90)
+	}
+
 	for rows.Next() {
 		var p StrainTrendPoint
 		if err := rows.Scan(&p.Date, &p.Strain, &p.MaxHeartRate, &p.Kilojoule); err != nil {
@@ -176,7 +189,7 @@ func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, e
 	}
 	defer rows.Close()
 
-	var points []CorrelationPoint
+	points := make([]CorrelationPoint, 0, 365) // Typical 1-year view
 	for rows.Next() {
 		var p CorrelationPoint
 		if err := rows.Scan(&p.X, &p.Y); err != nil {

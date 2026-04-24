@@ -83,6 +83,10 @@ func (db *DB) ListWorkouts(from, to string) ([]models.Workout, error) {
 	defer rows.Close()
 
 	var workouts []models.Workout
+	if from != "" && to == "" {
+		workouts = make([]models.Workout, 0, 90)
+	}
+
 	for rows.Next() {
 		var w models.Workout
 		var strain, kj, pctRec, dist, altGain, altChange float64

@@ -65,6 +65,10 @@ func (db *DB) ListRecoveries(from, to string) ([]models.Recovery, error) {
 	defer rows.Close()
 
 	var recoveries []models.Recovery
+	if from != "" && to == "" {
+		recoveries = make([]models.Recovery, 0, 90)
+	}
+
 	for rows.Next() {
 		var r models.Recovery
 		var calibrating bool

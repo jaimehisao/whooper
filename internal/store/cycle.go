@@ -61,6 +61,10 @@ func (db *DB) ListCycles(from, to string) ([]models.Cycle, error) {
 	defer rows.Close()
 
 	var cycles []models.Cycle
+	if from != "" && to == "" {
+		cycles = make([]models.Cycle, 0, 90)
+	}
+
 	for rows.Next() {
 		var c models.Cycle
 		var strain, kj float64
