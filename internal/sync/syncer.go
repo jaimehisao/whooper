@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"git.infra.hisao.org/hisao/whooper/internal/api"
+	"git.infra.hisao.org/hisao/whooper/internal/models"
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 )
 
@@ -128,37 +129,41 @@ func (s *Syncer) syncProfile() error {
 }
 
 func (s *Syncer) syncCycles(start string) error {
-	cycles, err := s.client.GetCycles(start, "")
-	if err != nil {
-		return err
-	}
-	s.progress("cycles", len(cycles))
-	return s.db.SaveCycles(cycles)
+	var total int
+	err := s.client.ForEachCycle(start, "", func(cycles []models.Cycle) error {
+		total += len(cycles)
+		s.progress("cycles", total)
+		return s.db.SaveCycles(cycles)
+	})
+	return err
 }
 
 func (s *Syncer) syncRecoveries(start string) error {
-	recoveries, err := s.client.GetRecoveries(start, "")
-	if err != nil {
-		return err
-	}
-	s.progress("recoveries", len(recoveries))
-	return s.db.SaveRecoveries(recoveries)
+	var total int
+	err := s.client.ForEachRecovery(start, "", func(recoveries []models.Recovery) error {
+		total += len(recoveries)
+		s.progress("recoveries", total)
+		return s.db.SaveRecoveries(recoveries)
+	})
+	return err
 }
 
 func (s *Syncer) syncSleeps(start string) error {
-	sleeps, err := s.client.GetSleeps(start, "")
-	if err != nil {
-		return err
-	}
-	s.progress("sleeps", len(sleeps))
-	return s.db.SaveSleeps(sleeps)
+	var total int
+	err := s.client.ForEachSleep(start, "", func(sleeps []models.Sleep) error {
+		total += len(sleeps)
+		s.progress("sleeps", total)
+		return s.db.SaveSleeps(sleeps)
+	})
+	return err
 }
 
 func (s *Syncer) syncWorkouts(start string) error {
-	workouts, err := s.client.GetWorkouts(start, "")
-	if err != nil {
-		return err
-	}
-	s.progress("workouts", len(workouts))
-	return s.db.SaveWorkouts(workouts)
+	var total int
+	err := s.client.ForEachWorkout(start, "", func(workouts []models.Workout) error {
+		total += len(workouts)
+		s.progress("workouts", total)
+		return s.db.SaveWorkouts(workouts)
+	})
+	return err
 }
