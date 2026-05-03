@@ -41,9 +41,31 @@ whooper
 | `whooper` | Launch TUI dashboard (default) |
 | `whooper login` | OAuth2 browser login flow |
 | `whooper sync` | Fetch latest data from Whoop API |
+| `whooper sync --debug` | Fetch data with local diagnostic output |
 | `whooper config` | Show current configuration |
 | `whooper config set <key> <value>` | Set config (client-id, client-secret, redirect-url) |
+| `whooper doctor --json` | Run machine-readable readiness checks |
+| `whooper status --json` | Show local config, token, database, and sync state |
 | `whooper export -e <entity> -f <format>` | Export data (entities: cycles, recoveries, sleeps, workouts; formats: json, csv) |
+
+## Troubleshooting
+
+Start with local readiness checks:
+
+```bash
+whooper doctor --skip-api
+whooper status
+```
+
+For issue reports or reproducible support bundles, collect machine-readable output:
+
+```bash
+whooper doctor --json --skip-api
+whooper status --json
+whooper sync --debug
+```
+
+Use `doctor --skip-api` when credentials or network access are unavailable. Use `sync --debug` when authentication succeeds but sync behavior is unclear; it prints config presence, token loading, database path, selected sync range, sync failures, and alert evaluation counts without printing secrets.
 
 ## TUI Keybindings
 

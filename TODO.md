@@ -45,4 +45,4 @@ This backlog tracks the next production-hardening and test-improvement work.
 
 - [x] Add `--debug` or verbose mode with structured logs around sync retries/failures.
 - [x] Add tests validating expected debug log events for sync and API failures.
-- [ ] Document troubleshooting workflow for collecting logs and reproducing failures.
+- [x] Document troubleshooting workflow for collecting logs and reproducing failures.
