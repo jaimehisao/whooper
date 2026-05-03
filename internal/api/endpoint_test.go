@@ -160,3 +160,28 @@ func TestForEachEndpoints(t *testing.T) {
 		}
 	})
 }
+
+func TestEndpointParams(t *testing.T) {
+	tests := []struct {
+		name string
+		got  map[string]string
+	}{
+		{name: "recovery", got: recoveryParams("2024-01-01", "2024-01-31")},
+		{name: "sleep", got: sleepParams("2024-01-01", "2024-01-31")},
+		{name: "workout", got: workoutParams("2024-01-01", "2024-01-31")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got["limit"] != "25" {
+				t.Fatalf("limit = %q, want 25", tt.got["limit"])
+			}
+			if tt.got["start"] != "2024-01-01" {
+				t.Fatalf("start = %q, want 2024-01-01", tt.got["start"])
+			}
+			if tt.got["end"] != "2024-01-31" {
+				t.Fatalf("end = %q, want 2024-01-31", tt.got["end"])
+			}
+		})
+	}
+}

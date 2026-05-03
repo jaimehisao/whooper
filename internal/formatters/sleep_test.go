@@ -85,6 +85,25 @@ func TestFormatSleepSummary_Empty(t *testing.T) {
 	}
 }
 
+func TestFormatSleepStageBars(t *testing.T) {
+	data := []store.SleepTrendPoint{
+		{Date: "2024-01-01", DurationMilli: 28800000, EfficiencyPct: 90},
+		{Date: "2024-01-02", DurationMilli: 25200000, EfficiencyPct: 85},
+	}
+
+	got := FormatSleepStageBars(data)
+	want := "Sleep data for 2 days"
+	if got != want {
+		t.Fatalf("FormatSleepStageBars() = %q, want %q", got, want)
+	}
+}
+
+func TestFormatSleepStageBars_Empty(t *testing.T) {
+	if got := FormatSleepStageBars(nil); got != "" {
+		t.Fatalf("FormatSleepStageBars(nil) = %q, want empty", got)
+	}
+}
+
 func TestSleepDateRange(t *testing.T) {
 	from, to := SleepDateRange(7)
 	if from == "" || to == "" {

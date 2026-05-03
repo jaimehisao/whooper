@@ -96,6 +96,42 @@ func TestApp_UpdateMisc(t *testing.T) {
 	app.View()
 }
 
+func TestApp_UpdateAdditionalBranches(t *testing.T) {
+	app := NewApp(nil)
+	mock := &mockModel{}
+	app.SetViews(mock, mock, mock, mock, mock)
+
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
+	app = model.(*App)
+	if app.activeTab != 1 {
+		t.Fatalf("activeTab after tab = %d, want 1", app.activeTab)
+	}
+
+	model, _ = app.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	app = model.(*App)
+	if app.activeTab != 0 {
+		t.Fatalf("activeTab after shift+tab = %d, want 0", app.activeTab)
+	}
+
+	app.syncing = true
+	app.syncMsg = "Syncing..."
+	app.Update(clearSyncMsg{})
+	if app.syncMsg != "Syncing..." {
+		t.Fatalf("clearSyncMsg cleared active sync message")
+	}
+
+	app.syncing = false
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if cmd != nil || app.syncing {
+		t.Fatalf("sync without syncFunc should not start")
+	}
+
+	_, cmd = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd == nil {
+		t.Fatal("quit key should return a command")
+	}
+}
+
 func TestKeyMap(t *testing.T) {
 	km := DefaultKeyMap()
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}, km.Quit) {

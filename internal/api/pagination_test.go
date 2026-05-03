@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -155,5 +156,64 @@ func TestFetchAll_ServerError(t *testing.T) {
 	_, err := FetchAll[testItem](client, "/items", nil)
 	if err == nil {
 		t.Fatal("expected error for server error response, got nil")
+	}
+}
+
+func TestFetchPaginated_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("not-json"))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	err := FetchPaginated[testItem](client, "/items", nil, func(records []testItem) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected decode error, got nil")
+	}
+}
+
+func TestFetchPaginated_CallbackError(t *testing.T) {
+	callbackErr := errors.New("stop")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := paginatedResponse[testItem]{Records: []testItem{{ID: 1}}}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	err := FetchPaginated[testItem](client, "/items", nil, func(records []testItem) error {
+		return callbackErr
+	})
+	if !errors.Is(err, callbackErr) {
+		t.Fatalf("FetchPaginated error = %v, want callback error", err)
+	}
+}
+
+func TestFetchPaginated_RepeatedNextTokenStops(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		resp := paginatedResponse[testItem]{
+			Records:   []testItem{{ID: callCount}},
+			NextToken: "same-token",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	err := FetchPaginated[testItem](client, "/items", nil, func(records []testItem) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("FetchPaginated error = %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("callCount = %d, want 2", callCount)
 	}
 }

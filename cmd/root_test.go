@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -28,5 +29,27 @@ func TestRootCmdSilenceUsage(t *testing.T) {
 func TestRootCmdShort(t *testing.T) {
 	if rootCmd.Short == "" {
 		t.Error("Short should not be empty")
+	}
+}
+
+func TestExecuteSuccess(t *testing.T) {
+	var out bytes.Buffer
+	origOut := rootCmd.OutOrStdout()
+	origErr := rootCmd.ErrOrStderr()
+	origArgs := rootCmd.Flags().Args()
+
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(&out)
+	rootCmd.SetArgs([]string{"--help"})
+	defer func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetErr(origErr)
+		rootCmd.SetArgs(origArgs)
+	}()
+
+	Execute()
+
+	if out.Len() == 0 {
+		t.Fatal("Execute --help wrote no output")
 	}
 }

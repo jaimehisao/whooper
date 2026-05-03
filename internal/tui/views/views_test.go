@@ -50,7 +50,7 @@ func TestWorkoutsModel(t *testing.T) {
 
 	m := NewWorkouts(db)
 	pm := &m
-	
+
 	// Test Init
 	cmd := pm.Init()
 	if cmd == nil {
@@ -104,7 +104,7 @@ func TestDashboardModel(t *testing.T) {
 
 	now := time.Now().UTC()
 	startToday := now.Format(time.RFC3339)
-	
+
 	// Seed data
 	db.SaveRecoveries([]models.Recovery{
 		{CycleID: 1, UserID: 123, CreatedAt: startToday, ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 80, HRVRmssd: 50, RestingHeartRate: 60}},
@@ -115,7 +115,7 @@ func TestDashboardModel(t *testing.T) {
 
 	m := NewDashboard(db)
 	pm := &m
-	
+
 	// Test Init
 	cmd := pm.Init()
 	if cmd == nil {
@@ -157,7 +157,7 @@ func TestRecoveryModel(t *testing.T) {
 	msg := cmd()
 	m2, _ := pm.Update(msg)
 	rm := m2.(*RecoveryModel)
-	
+
 	if !rm.loaded {
 		t.Error("Expected loaded")
 	}
@@ -197,7 +197,7 @@ func TestSleepModel(t *testing.T) {
 	msg := cmd()
 	m2, _ := pm.Update(msg)
 	sm := m2.(*SleepModel)
-	
+
 	if !sm.loaded {
 		t.Error("Expected loaded")
 	}
@@ -226,7 +226,7 @@ func TestWorkoutsModel_Detail(t *testing.T) {
 
 	now := time.Now().UTC()
 	start1 := now.Add(-24 * time.Hour).Format(time.RFC3339)
-	
+
 	// Seed data
 	db.SaveWorkouts([]models.Workout{
 		{
@@ -295,12 +295,12 @@ func TestWorkoutsModel_Nav(t *testing.T) {
 	if pm.cursor != 0 {
 		t.Errorf("Expected cursor 0, got %d", pm.cursor)
 	}
-	
+
 	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}) // Beyond limit
 	if pm.cursor != 0 {
 		t.Errorf("Expected cursor 0, got %d", pm.cursor)
 	}
-	
+
 	// Test detail view with no score
 	db.SaveWorkouts([]models.Workout{
 		{ID: 3, Start: now.Format(time.RFC3339), Score: nil},
@@ -308,7 +308,7 @@ func TestWorkoutsModel_Nav(t *testing.T) {
 	pm.Update(pm.Refresh()())
 	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	pm.Update(tea.KeyMsg{Type: tea.KeyEnter}) 
+	pm.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	view := pm.View()
 	if !strings.Contains(view, "Workout Detail") {
 		t.Errorf("Expected detail view even with no score")
@@ -343,11 +343,48 @@ func TestDashboardModel_Nav(t *testing.T) {
 	db.SaveCycles([]models.Cycle{
 		{ID: 1, UserID: 123, Start: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.CycleScore{Strain: 15}},
 	})
-	
+
 	pm.Update(pm.Refresh()())
 	view = pm.View()
 	if !strings.Contains(view, "Recovery: 80%") || !strings.Contains(view, "Strain: 15.0") {
 		t.Errorf("Expected full dashboard view, got: %s", view)
+	}
+}
+
+func TestDashboardModel_ViewBranches(t *testing.T) {
+	m := NewDashboard(nil)
+	if view := m.View(); !strings.Contains(view, "Loading dashboard") {
+		t.Fatalf("expected loading view, got: %s", view)
+	}
+
+	m.loaded = true
+	m.recoveryScore = 25
+	m.hrvValue = 42
+	m.rhrValue = 58
+	m.sleepHours = 7.5
+	m.sleepEffPct = 91
+	m.dayStrain = 19
+	m.sparklineData = []float64{55, 60, 65, 70}
+	m.alerts = []string{"Low recovery: 25%", "High strain: 19.0"}
+	m.recentWorkouts = []models.Workout{
+		{
+			ID:      1,
+			Start:   "2024-01-15T10:00:00Z",
+			SportID: 1,
+			Score:   &models.WorkoutScore{Strain: 12.3},
+		},
+		{
+			ID:      2,
+			Start:   "2024-01-16T10:00:00Z",
+			SportID: 999,
+		},
+	}
+
+	view := m.View()
+	for _, want := range []string{"Low recovery", "High strain", "HRV: 42 ms", "Sleep: 7.5h", "7-Day Recovery", "Recent Workouts", "Cycling", "Sport 999"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("dashboard view missing %q in:\n%s", want, view)
+		}
 	}
 }
 
@@ -367,7 +404,7 @@ func TestRecoveryModel_Nav(t *testing.T) {
 	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<")})
 	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<")})
 	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<")}) // Beyond limit
-	
+
 	// Test with error
 	pm.err = "forced error"
 	view := pm.View()
@@ -381,7 +418,7 @@ func TestCorrelationsModel(t *testing.T) {
 	defer cleanup()
 
 	now := time.Now().UTC()
-	
+
 	// Seed data for correlations
 	db.SaveRecoveries([]models.Recovery{
 		{CycleID: 1, UserID: 123, CreatedAt: now.Add(-24 * time.Hour).Format(time.RFC3339), ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 80, HRVRmssd: 60}},
@@ -400,7 +437,7 @@ func TestCorrelationsModel(t *testing.T) {
 	msg := cmd()
 	m2, _ := pm.Update(msg)
 	cm := m2.(*CorrelationsModel)
-	
+
 	if !cm.loaded {
 		t.Error("Expected loaded")
 	}
@@ -428,7 +465,7 @@ func TestCorrelationsModel(t *testing.T) {
 	if pm.yIdx != 0 {
 		t.Errorf("Expected yIdx 0, got %d", pm.yIdx)
 	}
-	
+
 	// Test navigation beyond limits
 	for i := 0; i < 10; i++ {
 		pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(">")})
