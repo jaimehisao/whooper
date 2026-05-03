@@ -35,28 +35,35 @@ var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Launch the interactive TUI dashboard",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := tuiLoadConfig()
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
+		if cfg.ClientID == "" || cfg.ClientSecret == "" {
+			return fmt.Errorf(
+				"setup required before launching the dashboard.\nRun: whooper config set client-id <id>\n     whooper config set client-secret <secret>\nThen run: whooper login",
+			)
+		}
+
 		db, err := tuiOpenDB(tuiDBPath())
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
 		defer db.Close()
 
-		// Build sync function if credentials are available
+		// Build sync function if a token is available.
 		var syncFn func() error
-		cfg, cfgErr := tuiLoadConfig()
-		if cfgErr == nil && cfg.ClientID != "" {
-			token, tokErr := tuiLoadToken(tuiTokenPath())
-			if tokErr == nil {
-				oauthCfg := auth.OAuthConfig(cfg)
-				tokenSource := auth.PersistingTokenSource(
-					tuiTokenPath(),
-					oauthCfg.TokenSource(context.Background(), token),
-				)
-				client := tuiNewClient(tokenSource)
-				syncFn = func() error {
-					syncer := tuiNewSyncer(client, db)
-					return syncer.SyncAll()
-				}
+		token, tokErr := tuiLoadToken(tuiTokenPath())
+		if tokErr == nil {
+			oauthCfg := auth.OAuthConfig(cfg)
+			tokenSource := auth.PersistingTokenSource(
+				tuiTokenPath(),
+				oauthCfg.TokenSource(context.Background(), token),
+			)
+			client := tuiNewClient(tokenSource)
+			syncFn = func() error {
+				syncer := tuiNewSyncer(client, db)
+				return syncer.SyncAll()
 			}
 		}
 

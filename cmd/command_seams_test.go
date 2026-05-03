@@ -11,6 +11,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"git.infra.hisao.org/hisao/whooper/internal/api"
+	"git.infra.hisao.org/hisao/whooper/internal/auth"
 	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 	gosync "git.infra.hisao.org/hisao/whooper/internal/sync"
@@ -184,6 +185,35 @@ func TestTuiRunE_UsesInjectedRunnerAndSyncFunction(t *testing.T) {
 	}
 	if !fake.called {
 		t.Fatal("expected injected TUI syncer to run")
+	}
+}
+
+func TestTuiRunE_RequiresSetupBeforeLaunching(t *testing.T) {
+	tmpDir := t.TempDir()
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), filepath.Join(tmpDir, "whooper.db"))
+
+	origOpenDB := tuiOpenDB
+	origLoadConfig := tuiLoadConfig
+	origLoadToken := tuiLoadToken
+	defer func() {
+		tuiOpenDB = origOpenDB
+		tuiLoadConfig = origLoadConfig
+		tuiLoadToken = origLoadToken
+	}()
+
+	tuiOpenDB = func(string) (*store.DB, error) {
+		t.Fatal("database should not open when setup is missing")
+		return nil, nil
+	}
+	tuiLoadConfig = config.Load
+	tuiLoadToken = auth.LoadToken
+
+	err := tuiCmd.RunE(tuiCmd, nil)
+	if err == nil {
+		t.Fatal("expected setup error")
+	}
+	if !strings.Contains(err.Error(), "setup required before launching the dashboard") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
