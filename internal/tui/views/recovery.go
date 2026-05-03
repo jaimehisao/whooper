@@ -87,7 +87,7 @@ func (m *RecoveryModel) View() string {
 	header := tui.TitleStyle.Render(fmt.Sprintf("Recovery Trends (%dd)  < %dd >", days, days))
 	sparkW := m.sparkWidth()
 
-	var sections []string
+	sections := make([]string, 0, 8)
 	sections = append(sections, header)
 
 	if m.err != "" {
@@ -99,7 +99,9 @@ func (m *RecoveryModel) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
-	var recScores, hrvValues, rhrValues []float64
+	recScores := make([]float64, 0, len(m.data))
+	hrvValues := make([]float64, 0, len(m.data))
+	rhrValues := make([]float64, 0, len(m.data))
 	for _, d := range m.data {
 		recScores = append(recScores, d.RecoveryScore)
 		hrvValues = append(hrvValues, d.HRV)

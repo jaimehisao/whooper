@@ -108,7 +108,7 @@ func (m *SleepModel) View() string {
 		barW = 20
 	}
 
-	var sections []string
+	sections := make([]string, 0, 24)
 	sections = append(sections, header)
 
 	if m.err != "" {
@@ -120,7 +120,8 @@ func (m *SleepModel) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
-	var durations, efficiencies []float64
+	durations := make([]float64, 0, len(m.trend))
+	efficiencies := make([]float64, 0, len(m.trend))
 	for _, t := range m.trend {
 		durations = append(durations, float64(t.DurationMilli)/3600000.0)
 		efficiencies = append(efficiencies, t.EfficiencyPct)
@@ -206,4 +207,3 @@ func (m *SleepModel) sparkWidth() int {
 	}
 	return w
 }
-

@@ -89,6 +89,7 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("week recovery: %v", err))
 		}
+		msg.sparkline = make([]float64, 0, len(weekRecoveries))
 		for _, r := range weekRecoveries {
 			msg.sparkline = append(msg.sparkline, r.RecoveryScore)
 		}
@@ -143,7 +144,7 @@ func (m *DashboardModel) View() string {
 	}
 
 	sparkW := m.sparkWidth()
-	var sections []string
+	sections := make([]string, 0, 7+len(m.alerts))
 
 	if m.err != "" {
 		sections = append(sections, tui.RedStyle.Render("Error: "+m.err))
@@ -174,7 +175,7 @@ func (m *DashboardModel) View() string {
 	}
 
 	if len(m.recentWorkouts) > 0 {
-		var woLines []string
+		woLines := make([]string, 0, len(m.recentWorkouts)+1)
 		woLines = append(woLines, tui.TitleStyle.Render("Recent Workouts"))
 		for _, w := range m.recentWorkouts {
 			sport := models.SportName[w.SportID]

@@ -59,7 +59,8 @@ func (m *CorrelationsModel) Refresh() tea.Cmd {
 			return correlationDataMsg{err: err}
 		}
 
-		var xs, ys []float64
+		xs := make([]float64, 0, len(data))
+		ys := make([]float64, 0, len(data))
 		for _, p := range data {
 			xs = append(xs, p.X)
 			ys = append(ys, p.Y)
@@ -124,7 +125,7 @@ func (m *CorrelationsModel) View() string {
 
 	header := tui.TitleStyle.Render(fmt.Sprintf("Correlations: %s vs %s", xLabel, yLabel))
 
-	var sections []string
+	sections := make([]string, 0, 10)
 	sections = append(sections, header)
 
 	if m.err != "" {
@@ -218,23 +219,25 @@ func renderScatter(data []store.CorrelationPoint, width, height int) string {
 
 	dotStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00D46A"))
 
-	var lines []string
+	var b strings.Builder
+	b.Grow(height * (width + 5))
 	for _, row := range grid {
-		line := "  │"
+		b.WriteString("  │")
 		for _, cell := range row {
 			switch {
 			case cell == 0:
-				line += " "
+				b.WriteByte(' ')
 			case cell == 1:
-				line += dotStyle.Render("·")
+				b.WriteString(dotStyle.Render("·"))
 			case cell <= 3:
-				line += dotStyle.Render("●")
+				b.WriteString(dotStyle.Render("●"))
 			default:
-				line += dotStyle.Render("◉")
+				b.WriteString(dotStyle.Render("◉"))
 			}
 		}
-		lines = append(lines, line)
+		b.WriteByte('\n')
 	}
 
-	return strings.Join(lines, "\n")
+	out := b.String()
+	return strings.TrimSuffix(out, "\n")
 }

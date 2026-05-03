@@ -104,7 +104,7 @@ func (m *WorkoutsModel) View() string {
 	days := workoutRanges[m.rangeIdx]
 	header := tui.TitleStyle.Render(fmt.Sprintf("Workouts (%dd)  < %dd >", days, days))
 
-	var sections []string
+	sections := make([]string, 0, 4)
 	sections = append(sections, header)
 
 	if m.err != "" {
@@ -152,7 +152,7 @@ func (m *WorkoutsModel) View() string {
 	headers := []string{"Date", "Sport", "Strain", "Avg HR", "Max HR", "Duration"}
 	widths := []int{12, sportW, 8, 8, 8, 10}
 
-	var rows [][]string
+	rows := make([][]string, 0, endIdx-startIdx)
 	for i := startIdx; i < endIdx; i++ {
 		w := m.workouts[i]
 		sport := models.SportName[w.SportID]
@@ -186,7 +186,7 @@ func (m *WorkoutsModel) detailView() string {
 	}
 
 	t, _ := time.Parse(time.RFC3339, w.Start)
-	var lines []string
+	lines := make([]string, 0, 16)
 	lines = append(lines, tui.TitleStyle.Render(fmt.Sprintf("Workout Detail: %s", sport)))
 	lines = append(lines, fmt.Sprintf("  Date:     %s", t.Format("2006-01-02 15:04")))
 	lines = append(lines, fmt.Sprintf("  Duration: %s", calcDuration(w.Start, w.End)))
