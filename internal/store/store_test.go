@@ -75,6 +75,19 @@ func TestOpenReadOnlyMissingDatabase(t *testing.T) {
 	}
 }
 
+func TestOpenCreatesParentDirectory(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "nested", "whooper.db")
+	db, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := os.Stat(filepath.Dir(dbPath)); err != nil {
+		t.Fatalf("expected parent directory to exist: %v", err)
+	}
+}
+
 func TestSaveProfile_GetProfile(t *testing.T) {
 	db := openTestDB(t)
 

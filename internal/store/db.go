@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"net/url"
+	"os"
+	"path/filepath"
 
 	_ "modernc.org/sqlite"
 )
@@ -12,6 +14,9 @@ type DB struct {
 }
 
 func Open(path string) (*DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(wal)&_pragma=synchronous(normal)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
