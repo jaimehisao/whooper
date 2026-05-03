@@ -41,7 +41,7 @@ func TestWriteCSVWorkouts(t *testing.T) {
 	var buf bytes.Buffer
 	data := []models.Workout{
 		{
-			ID:      10,
+			ID:      "10",
 			Start:   "2024-01-15T10:00:00Z",
 			SportID: 1,
 			Score: &models.WorkoutScore{
@@ -52,7 +52,7 @@ func TestWriteCSVWorkouts(t *testing.T) {
 				DistanceMeter:    3210,
 			},
 		},
-		{ID: 11, Start: "2024-01-16T10:00:00Z", SportID: 999},
+		{ID: "11", Start: "2024-01-16T10:00:00Z", SportID: 999},
 	}
 
 	if err := writeCSV(&buf, "workouts", data); err != nil {
@@ -71,7 +71,7 @@ func TestWriteCSVSleeps(t *testing.T) {
 	var buf bytes.Buffer
 	data := []models.Sleep{
 		{
-			ID:    20,
+			ID:    "20",
 			Start: "2024-01-15T22:00:00Z",
 			End:   "2024-01-16T06:00:00Z",
 			Nap:   true,
@@ -81,7 +81,7 @@ func TestWriteCSVSleeps(t *testing.T) {
 				RespiratoryRate:     16.2,
 			},
 		},
-		{ID: 21, Start: "2024-01-16T22:00:00Z", End: "2024-01-17T06:00:00Z"},
+		{ID: "21", Start: "2024-01-16T22:00:00Z", End: "2024-01-17T06:00:00Z"},
 	}
 
 	if err := writeCSV(&buf, "sleeps", data); err != nil {

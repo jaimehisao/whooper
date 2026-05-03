@@ -1,7 +1,7 @@
 package models
 
 type Workout struct {
-	ID         int           `json:"id"`
+	ID         string        `json:"id"`
 	UserID     int           `json:"user_id"`
 	CreatedAt  string        `json:"created_at"`
 	UpdatedAt  string        `json:"updated_at"`
@@ -13,15 +13,15 @@ type Workout struct {
 }
 
 type WorkoutScore struct {
-	Strain           float64 `json:"strain"`
-	AverageHeartRate int     `json:"average_heart_rate"`
-	MaxHeartRate     int     `json:"max_heart_rate"`
-	Kilojoule        float64 `json:"kilojoule"`
-	PercentRecorded  float64 `json:"percent_recorded"`
-	DistanceMeter    float64 `json:"distance_meter"`
-	AltitudeGainMeter float64 `json:"altitude_gain_meter"`
-	AltitudeChangeMeter float64 `json:"altitude_change_meter"`
-	ZoneDuration     *ZoneDuration `json:"zone_duration"`
+	Strain              float64       `json:"strain"`
+	AverageHeartRate    int           `json:"average_heart_rate"`
+	MaxHeartRate        int           `json:"max_heart_rate"`
+	Kilojoule           float64       `json:"kilojoule"`
+	PercentRecorded     float64       `json:"percent_recorded"`
+	DistanceMeter       float64       `json:"distance_meter"`
+	AltitudeGainMeter   float64       `json:"altitude_gain_meter"`
+	AltitudeChangeMeter float64       `json:"altitude_change_meter"`
+	ZoneDuration        *ZoneDuration `json:"zone_duration"`
 }
 
 type ZoneDuration struct {

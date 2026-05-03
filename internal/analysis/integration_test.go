@@ -26,7 +26,7 @@ func TestGenerateWeeklyReport(t *testing.T) {
 
 	if err := db.SaveRecoveries([]models.Recovery{
 		{
-			CycleID: 1, SleepID: 11, UserID: 1,
+			CycleID: 1, SleepID: "11", UserID: 1,
 			CreatedAt:  "2024-01-15T07:00:00Z",
 			UpdatedAt:  "2024-01-15T07:00:00Z",
 			ScoreState: "SCORED",
@@ -37,7 +37,7 @@ func TestGenerateWeeklyReport(t *testing.T) {
 			},
 		},
 		{
-			CycleID: 2, SleepID: 12, UserID: 1,
+			CycleID: 2, SleepID: "12", UserID: 1,
 			CreatedAt:  "2024-01-16T07:00:00Z",
 			UpdatedAt:  "2024-01-16T07:00:00Z",
 			ScoreState: "SCORED",
@@ -53,7 +53,7 @@ func TestGenerateWeeklyReport(t *testing.T) {
 
 	if err := db.SaveSleeps([]models.Sleep{
 		{
-			ID: 11, UserID: 1,
+			ID: "11", UserID: 1,
 			CreatedAt:  "2024-01-15T00:00:00Z",
 			UpdatedAt:  "2024-01-15T07:00:00Z",
 			Start:      "2024-01-14T23:00:00Z",
@@ -68,7 +68,7 @@ func TestGenerateWeeklyReport(t *testing.T) {
 			},
 		},
 		{
-			ID: 12, UserID: 1,
+			ID: "12", UserID: 1,
 			CreatedAt:  "2024-01-16T00:00:00Z",
 			UpdatedAt:  "2024-01-16T07:00:00Z",
 			Start:      "2024-01-15T23:00:00Z",
@@ -111,7 +111,7 @@ func TestGenerateWeeklyReport(t *testing.T) {
 
 	if err := db.SaveWorkouts([]models.Workout{
 		{
-			ID: 100, UserID: 1,
+			ID: "100", UserID: 1,
 			CreatedAt:  "2024-01-15T09:00:00Z",
 			UpdatedAt:  "2024-01-15T10:00:00Z",
 			Start:      "2024-01-15T09:00:00Z",
@@ -121,7 +121,7 @@ func TestGenerateWeeklyReport(t *testing.T) {
 			Score:      &models.WorkoutScore{Strain: 8},
 		},
 		{
-			ID: 101, UserID: 1,
+			ID: "101", UserID: 1,
 			CreatedAt:  "2024-01-16T09:00:00Z",
 			UpdatedAt:  "2024-01-16T10:00:00Z",
 			Start:      "2024-01-16T09:00:00Z",

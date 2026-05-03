@@ -117,6 +117,130 @@ var migrations = []migration{
 			`CREATE INDEX IF NOT EXISTS idx_workout_scored_start ON workout(score_state, start)`,
 		},
 	},
+	{
+		version: 3,
+		statements: []string{
+			`ALTER TABLE recovery RENAME TO recovery_old`,
+			`CREATE TABLE recovery (
+				cycle_id           INTEGER PRIMARY KEY,
+				sleep_id           TEXT,
+				user_id            INTEGER NOT NULL,
+				created_at         TEXT NOT NULL,
+				updated_at         TEXT NOT NULL,
+				score_state        TEXT,
+				user_calibrating   INTEGER,
+				recovery_score     REAL,
+				resting_heart_rate REAL,
+				hrv_rmssd          REAL,
+				spo2_percentage    REAL,
+				skin_temp_celsius  REAL
+			)`,
+			`INSERT INTO recovery (
+				cycle_id, sleep_id, user_id, created_at, updated_at, score_state,
+				user_calibrating, recovery_score, resting_heart_rate, hrv_rmssd,
+				spo2_percentage, skin_temp_celsius
+			)
+			SELECT cycle_id, CAST(sleep_id AS TEXT), user_id, created_at, updated_at, score_state,
+				user_calibrating, recovery_score, resting_heart_rate, hrv_rmssd,
+				spo2_percentage, skin_temp_celsius
+			FROM recovery_old`,
+			`DROP TABLE recovery_old`,
+
+			`ALTER TABLE sleep RENAME TO sleep_old`,
+			`CREATE TABLE sleep (
+				id                            TEXT PRIMARY KEY,
+				user_id                       INTEGER NOT NULL,
+				created_at                    TEXT NOT NULL,
+				updated_at                    TEXT NOT NULL,
+				start                         TEXT NOT NULL,
+				end                           TEXT,
+				nap                           INTEGER NOT NULL DEFAULT 0,
+				score_state                   TEXT,
+				total_in_bed_time_milli       INTEGER,
+				total_awake_time_milli        INTEGER,
+				total_no_data_time_milli      INTEGER,
+				total_light_sleep_time_milli  INTEGER,
+				total_slow_wave_sleep_time_milli INTEGER,
+				total_rem_sleep_time_milli    INTEGER,
+				sleep_cycle_count             INTEGER,
+				disturbance_count             INTEGER,
+				baseline_sleep_needed_milli   INTEGER,
+				need_from_sleep_debt_milli    INTEGER,
+				need_from_recent_strain_milli INTEGER,
+				need_from_recent_nap_milli    INTEGER,
+				respiratory_rate              REAL,
+				sleep_performance_pct         REAL,
+				sleep_consistency_pct         REAL,
+				sleep_efficiency_pct          REAL
+			)`,
+			`INSERT INTO sleep (
+				id, user_id, created_at, updated_at, start, end, nap, score_state,
+				total_in_bed_time_milli, total_awake_time_milli, total_no_data_time_milli,
+				total_light_sleep_time_milli, total_slow_wave_sleep_time_milli, total_rem_sleep_time_milli,
+				sleep_cycle_count, disturbance_count,
+				baseline_sleep_needed_milli, need_from_sleep_debt_milli,
+				need_from_recent_strain_milli, need_from_recent_nap_milli,
+				respiratory_rate, sleep_performance_pct, sleep_consistency_pct, sleep_efficiency_pct
+			)
+			SELECT CAST(id AS TEXT), user_id, created_at, updated_at, start, end, nap, score_state,
+				total_in_bed_time_milli, total_awake_time_milli, total_no_data_time_milli,
+				total_light_sleep_time_milli, total_slow_wave_sleep_time_milli, total_rem_sleep_time_milli,
+				sleep_cycle_count, disturbance_count,
+				baseline_sleep_needed_milli, need_from_sleep_debt_milli,
+				need_from_recent_strain_milli, need_from_recent_nap_milli,
+				respiratory_rate, sleep_performance_pct, sleep_consistency_pct, sleep_efficiency_pct
+			FROM sleep_old`,
+			`DROP TABLE sleep_old`,
+
+			`ALTER TABLE workout RENAME TO workout_old`,
+			`CREATE TABLE workout (
+				id                    TEXT PRIMARY KEY,
+				user_id               INTEGER NOT NULL,
+				created_at            TEXT NOT NULL,
+				updated_at            TEXT NOT NULL,
+				start                 TEXT NOT NULL,
+				end                   TEXT,
+				sport_id              INTEGER,
+				score_state           TEXT,
+				strain                REAL,
+				average_heart_rate    INTEGER,
+				max_heart_rate        INTEGER,
+				kilojoule             REAL,
+				percent_recorded      REAL,
+				distance_meter        REAL,
+				altitude_gain_meter   REAL,
+				altitude_change_meter REAL,
+				zone_zero_milli       INTEGER,
+				zone_one_milli        INTEGER,
+				zone_two_milli        INTEGER,
+				zone_three_milli      INTEGER,
+				zone_four_milli       INTEGER,
+				zone_five_milli       INTEGER
+			)`,
+			`INSERT INTO workout (
+				id, user_id, created_at, updated_at, start, end, sport_id, score_state,
+				strain, average_heart_rate, max_heart_rate, kilojoule,
+				percent_recorded, distance_meter, altitude_gain_meter, altitude_change_meter,
+				zone_zero_milli, zone_one_milli, zone_two_milli,
+				zone_three_milli, zone_four_milli, zone_five_milli
+			)
+			SELECT CAST(id AS TEXT), user_id, created_at, updated_at, start, end, sport_id, score_state,
+				strain, average_heart_rate, max_heart_rate, kilojoule,
+				percent_recorded, distance_meter, altitude_gain_meter, altitude_change_meter,
+				zone_zero_milli, zone_one_milli, zone_two_milli,
+				zone_three_milli, zone_four_milli, zone_five_milli
+			FROM workout_old`,
+			`DROP TABLE workout_old`,
+
+			`CREATE INDEX IF NOT EXISTS idx_recovery_created ON recovery(created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_sleep_start ON sleep(start)`,
+			`CREATE INDEX IF NOT EXISTS idx_workout_start ON workout(start)`,
+			`CREATE INDEX IF NOT EXISTS idx_recovery_scored_date ON recovery(score_state, created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_cycle_scored_start ON cycle(score_state, start)`,
+			`CREATE INDEX IF NOT EXISTS idx_sleep_scored ON sleep(nap, score_state, start)`,
+			`CREATE INDEX IF NOT EXISTS idx_workout_scored_start ON workout(score_state, start)`,
+		},
+	},
 }
 
 func (db *DB) migrate() error {

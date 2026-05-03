@@ -1,7 +1,7 @@
 package models
 
 type Sleep struct {
-	ID         int         `json:"id"`
+	ID         string      `json:"id"`
 	UserID     int         `json:"user_id"`
 	CreatedAt  string      `json:"created_at"`
 	UpdatedAt  string      `json:"updated_at"`
@@ -13,12 +13,12 @@ type Sleep struct {
 }
 
 type SleepScore struct {
-	StageSummary          SleepStageSummary `json:"stage_summary"`
-	SleepNeeded           SleepNeeded       `json:"sleep_needed"`
-	RespiratoryRate       float64           `json:"respiratory_rate"`
-	SleepPerformancePct   float64           `json:"sleep_performance_percentage"`
-	SleepConsistencyPct   float64           `json:"sleep_consistency_percentage"`
-	SleepEfficiencyPct    float64           `json:"sleep_efficiency_percentage"`
+	StageSummary        SleepStageSummary `json:"stage_summary"`
+	SleepNeeded         SleepNeeded       `json:"sleep_needed"`
+	RespiratoryRate     float64           `json:"respiratory_rate"`
+	SleepPerformancePct float64           `json:"sleep_performance_percentage"`
+	SleepConsistencyPct float64           `json:"sleep_consistency_percentage"`
+	SleepEfficiencyPct  float64           `json:"sleep_efficiency_percentage"`
 }
 
 type SleepStageSummary struct {

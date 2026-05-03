@@ -162,7 +162,7 @@ func TestSaveRecoveries_ListRecoveries(t *testing.T) {
 
 	recoveries := []models.Recovery{
 		{
-			CycleID: 1, SleepID: 10, UserID: 100,
+			CycleID: 1, SleepID: "10", UserID: 100,
 			CreatedAt: "2025-01-15T08:00:00Z", UpdatedAt: "2025-01-15T08:00:00Z",
 			ScoreState: "SCORED",
 			Score: &models.RecoveryScore{
@@ -175,7 +175,7 @@ func TestSaveRecoveries_ListRecoveries(t *testing.T) {
 			},
 		},
 		{
-			CycleID: 2, SleepID: 11, UserID: 100,
+			CycleID: 2, SleepID: "11", UserID: 100,
 			CreatedAt: "2025-01-16T08:00:00Z", UpdatedAt: "2025-01-16T08:00:00Z",
 			ScoreState: "SCORED",
 			Score: &models.RecoveryScore{
@@ -210,7 +210,7 @@ func TestSaveSleeps_ListSleeps_ExcludeNaps(t *testing.T) {
 
 	sleeps := []models.Sleep{
 		{
-			ID: 10, UserID: 100,
+			ID: "10", UserID: 100,
 			CreatedAt: "2025-01-15T06:00:00Z", UpdatedAt: "2025-01-15T06:00:00Z",
 			Start: "2025-01-14T22:00:00Z", End: "2025-01-15T06:00:00Z",
 			Nap: false, ScoreState: "SCORED",
@@ -238,7 +238,7 @@ func TestSaveSleeps_ListSleeps_ExcludeNaps(t *testing.T) {
 			},
 		},
 		{
-			ID: 11, UserID: 100,
+			ID: "11", UserID: 100,
 			CreatedAt: "2025-01-15T15:00:00Z", UpdatedAt: "2025-01-15T15:00:00Z",
 			Start: "2025-01-15T13:00:00Z", End: "2025-01-15T13:30:00Z",
 			Nap: true, ScoreState: "SCORED",
@@ -276,8 +276,8 @@ func TestSaveSleeps_ListSleeps_ExcludeNaps(t *testing.T) {
 	if len(noNaps) != 1 {
 		t.Fatalf("expected 1 sleep excluding naps, got %d", len(noNaps))
 	}
-	if noNaps[0].ID != 10 {
-		t.Errorf("expected sleep ID 10, got %d", noNaps[0].ID)
+	if noNaps[0].ID != "10" {
+		t.Errorf("expected sleep ID 10, got %s", noNaps[0].ID)
 	}
 }
 
@@ -286,7 +286,7 @@ func TestSaveWorkouts_ListWorkouts(t *testing.T) {
 
 	workouts := []models.Workout{
 		{
-			ID: 500, UserID: 100,
+			ID: "500", UserID: 100,
 			CreatedAt: "2025-01-15T10:00:00Z", UpdatedAt: "2025-01-15T10:00:00Z",
 			Start: "2025-01-15T09:00:00Z", End: "2025-01-15T10:00:00Z",
 			SportID: 0, ScoreState: "SCORED",
@@ -323,8 +323,8 @@ func TestSaveWorkouts_ListWorkouts(t *testing.T) {
 		t.Fatalf("expected 1 workout, got %d", len(all))
 	}
 	w := all[0]
-	if w.ID != 500 {
-		t.Errorf("expected workout ID 500, got %d", w.ID)
+	if w.ID != "500" {
+		t.Errorf("expected workout ID 500, got %s", w.ID)
 	}
 	if w.Score == nil {
 		t.Fatal("expected non-nil score")
@@ -382,7 +382,7 @@ func TestGetRecoveryTrend(t *testing.T) {
 
 	recoveries := []models.Recovery{
 		{
-			CycleID: 1, SleepID: 10, UserID: 100,
+			CycleID: 1, SleepID: "10", UserID: 100,
 			CreatedAt: "2025-01-15T08:00:00Z", UpdatedAt: "2025-01-15T08:00:00Z",
 			ScoreState: "SCORED",
 			Score: &models.RecoveryScore{
@@ -390,7 +390,7 @@ func TestGetRecoveryTrend(t *testing.T) {
 			},
 		},
 		{
-			CycleID: 2, SleepID: 11, UserID: 100,
+			CycleID: 2, SleepID: "11", UserID: 100,
 			CreatedAt: "2025-01-16T08:00:00Z", UpdatedAt: "2025-01-16T08:00:00Z",
 			ScoreState: "SCORED",
 			Score: &models.RecoveryScore{
@@ -398,7 +398,7 @@ func TestGetRecoveryTrend(t *testing.T) {
 			},
 		},
 		{
-			CycleID: 3, SleepID: 12, UserID: 100,
+			CycleID: 3, SleepID: "12", UserID: 100,
 			CreatedAt: "2025-01-17T08:00:00Z", UpdatedAt: "2025-01-17T08:00:00Z",
 			ScoreState: "PENDING",
 			Score:      nil,
@@ -431,7 +431,7 @@ func TestGetCorrelationData(t *testing.T) {
 	// Insert recoveries with SCORED state
 	recoveries := []models.Recovery{
 		{
-			CycleID: 1, SleepID: 10, UserID: 100,
+			CycleID: 1, SleepID: "10", UserID: 100,
 			CreatedAt: "2025-01-15T08:00:00Z", UpdatedAt: "2025-01-15T08:00:00Z",
 			ScoreState: "SCORED",
 			Score: &models.RecoveryScore{
@@ -439,7 +439,7 @@ func TestGetCorrelationData(t *testing.T) {
 			},
 		},
 		{
-			CycleID: 2, SleepID: 11, UserID: 100,
+			CycleID: 2, SleepID: "11", UserID: 100,
 			CreatedAt: "2025-01-16T08:00:00Z", UpdatedAt: "2025-01-16T08:00:00Z",
 			ScoreState: "SCORED",
 			Score: &models.RecoveryScore{

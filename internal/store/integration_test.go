@@ -110,7 +110,7 @@ func TestDB_SaveRecoveries(t *testing.T) {
 	recoveries := []models.Recovery{
 		{
 			CycleID:    1,
-			SleepID:    1,
+			SleepID:    "1",
 			UserID:     123,
 			CreatedAt:  "2024-01-15T00:00:00Z",
 			UpdatedAt:  "2024-01-15T06:00:00Z",
@@ -154,7 +154,7 @@ func TestDB_SaveSleeps(t *testing.T) {
 
 	sleeps := []models.Sleep{
 		{
-			ID:         1,
+			ID:         "1",
 			UserID:     123,
 			Start:      "2024-01-14T22:00:00Z",
 			End:        "2024-01-15T06:00:00Z",
@@ -200,7 +200,7 @@ func TestDB_SaveWorkouts(t *testing.T) {
 
 	workouts := []models.Workout{
 		{
-			ID:         1,
+			ID:         "1",
 			UserID:     123,
 			Start:      "2024-01-15T10:00:00Z",
 			End:        "2024-01-15T11:00:00Z",

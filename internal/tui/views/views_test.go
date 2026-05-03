@@ -3,6 +3,7 @@ package views
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,8 +42,8 @@ func TestWorkoutsModel(t *testing.T) {
 
 	// Seed some data
 	workouts := []models.Workout{
-		{ID: 1, UserID: 123, Start: start1, End: end1, SportID: 1, Score: &models.WorkoutScore{Strain: 10.5}},
-		{ID: 2, UserID: 123, Start: start2, End: end2, SportID: 1, Score: &models.WorkoutScore{Strain: 12.0}},
+		{ID: "1", UserID: 123, Start: start1, End: end1, SportID: 1, Score: &models.WorkoutScore{Strain: 10.5}},
+		{ID: "2", UserID: 123, Start: start2, End: end2, SportID: 1, Score: &models.WorkoutScore{Strain: 12.0}},
 	}
 	if err := db.SaveWorkouts(workouts); err != nil {
 		t.Fatal(err)
@@ -110,7 +111,7 @@ func TestDashboardModel(t *testing.T) {
 		{CycleID: 1, UserID: 123, CreatedAt: startToday, ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 80, HRVRmssd: 50, RestingHeartRate: 60}},
 	})
 	db.SaveSleeps([]models.Sleep{
-		{ID: 1, UserID: 123, Start: startToday, ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000}}},
+		{ID: "1", UserID: 123, Start: startToday, ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000}}},
 	})
 
 	m := NewDashboard(db)
@@ -187,8 +188,8 @@ func TestSleepModel(t *testing.T) {
 
 	now := time.Now().UTC()
 	db.SaveSleeps([]models.Sleep{
-		{ID: 1, UserID: 123, Start: now.Add(-24 * time.Hour).Format(time.RFC3339), ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000}, SleepEfficiencyPct: 90}},
-		{ID: 2, UserID: 123, Start: now.Add(-48 * time.Hour).Format(time.RFC3339), ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 7 * 3600 * 1000}, SleepEfficiencyPct: 85}},
+		{ID: "1", UserID: 123, Start: now.Add(-24 * time.Hour).Format(time.RFC3339), ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000}, SleepEfficiencyPct: 90}},
+		{ID: "2", UserID: 123, Start: now.Add(-48 * time.Hour).Format(time.RFC3339), ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 7 * 3600 * 1000}, SleepEfficiencyPct: 85}},
 	})
 
 	m := NewSleep(db)
@@ -230,7 +231,7 @@ func TestWorkoutsModel_Detail(t *testing.T) {
 	// Seed data
 	db.SaveWorkouts([]models.Workout{
 		{
-			ID: 1, UserID: 123, Start: start1, End: now.Add(-23 * time.Hour).Format(time.RFC3339),
+			ID: "1", UserID: 123, Start: start1, End: now.Add(-23 * time.Hour).Format(time.RFC3339),
 			SportID: 1, Score: &models.WorkoutScore{
 				Strain: 10.5,
 				ZoneDuration: &models.ZoneDuration{
@@ -273,8 +274,8 @@ func TestWorkoutsModel_Nav(t *testing.T) {
 
 	now := time.Now().UTC()
 	db.SaveWorkouts([]models.Workout{
-		{ID: 1, Start: now.Format(time.RFC3339)},
-		{ID: 2, Start: now.Add(-1 * time.Hour).Format(time.RFC3339)},
+		{ID: "1", Start: now.Format(time.RFC3339)},
+		{ID: "2", Start: now.Add(-1 * time.Hour).Format(time.RFC3339)},
 	})
 
 	m := NewWorkouts(db)
@@ -303,7 +304,7 @@ func TestWorkoutsModel_Nav(t *testing.T) {
 
 	// Test detail view with no score
 	db.SaveWorkouts([]models.Workout{
-		{ID: 3, Start: now.Format(time.RFC3339), Score: nil},
+		{ID: "3", Start: now.Format(time.RFC3339), Score: nil},
 	})
 	pm.Update(pm.Refresh()())
 	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
@@ -338,7 +339,7 @@ func TestDashboardModel_Nav(t *testing.T) {
 		{CycleID: 1, UserID: 123, CreatedAt: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 80}},
 	})
 	db.SaveSleeps([]models.Sleep{
-		{ID: 1, UserID: 123, Start: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000}}},
+		{ID: "1", UserID: 123, Start: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000}}},
 	})
 	db.SaveCycles([]models.Cycle{
 		{ID: 1, UserID: 123, Start: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.CycleScore{Strain: 15}},
@@ -368,13 +369,13 @@ func TestDashboardModel_ViewBranches(t *testing.T) {
 	m.alerts = []string{"Low recovery: 25%", "High strain: 19.0"}
 	m.recentWorkouts = []models.Workout{
 		{
-			ID:      1,
+			ID:      "1",
 			Start:   "2024-01-15T10:00:00Z",
 			SportID: 1,
 			Score:   &models.WorkoutScore{Strain: 12.3},
 		},
 		{
-			ID:      2,
+			ID:      "2",
 			Start:   "2024-01-16T10:00:00Z",
 			SportID: 999,
 		},
@@ -510,7 +511,7 @@ func TestWorkoutsModel_Viewport(t *testing.T) {
 	var workouts []models.Workout
 	for i := 0; i < 50; i++ {
 		workouts = append(workouts, models.Workout{
-			ID: i + 1, Start: now.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339),
+			ID: strconv.Itoa(i + 1), Start: now.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339),
 		})
 	}
 	db.SaveWorkouts(workouts)

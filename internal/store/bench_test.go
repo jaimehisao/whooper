@@ -27,7 +27,7 @@ func makeRecoveries(n int) []models.Recovery {
 		ts := base.AddDate(0, 0, i).Format(time.RFC3339)
 		out = append(out, models.Recovery{
 			CycleID:    i + 1,
-			SleepID:    i + 1,
+			SleepID:    fmt.Sprintf("%d", i+1),
 			UserID:     1,
 			CreatedAt:  ts,
 			UpdatedAt:  ts,

@@ -2,7 +2,7 @@ package models
 
 type Recovery struct {
 	CycleID    int            `json:"cycle_id"`
-	SleepID    int            `json:"sleep_id"`
+	SleepID    string         `json:"sleep_id"`
 	UserID     int            `json:"user_id"`
 	CreatedAt  string         `json:"created_at"`
 	UpdatedAt  string         `json:"updated_at"`

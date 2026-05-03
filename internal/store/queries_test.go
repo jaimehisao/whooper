@@ -65,7 +65,7 @@ func TestGetSleepTrend(t *testing.T) {
 
 	err := db.SaveSleeps([]models.Sleep{
 		{
-			ID: 1, UserID: 1,
+			ID: "1", UserID: 1,
 			CreatedAt:  "2024-01-15T00:00:00Z",
 			UpdatedAt:  "2024-01-15T07:00:00Z",
 			Start:      "2024-01-15T00:00:00Z",
@@ -83,7 +83,7 @@ func TestGetSleepTrend(t *testing.T) {
 			},
 		},
 		{
-			ID: 2, UserID: 1,
+			ID: "2", UserID: 1,
 			CreatedAt:  "2024-01-15T12:00:00Z",
 			UpdatedAt:  "2024-01-15T12:30:00Z",
 			Start:      "2024-01-15T12:00:00Z",
@@ -128,7 +128,7 @@ func TestGetCorrelationDataAcrossTablesAndErrors(t *testing.T) {
 	}
 
 	if err := db.SaveSleeps([]models.Sleep{{
-		ID: 1, UserID: 1,
+		ID: "1", UserID: 1,
 		CreatedAt:  "2024-01-15T00:00:00Z",
 		UpdatedAt:  "2024-01-15T06:00:00Z",
 		Start:      "2024-01-15T00:00:00Z",

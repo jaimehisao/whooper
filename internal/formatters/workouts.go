@@ -16,7 +16,7 @@ type WorkoutDisplayData struct {
 }
 
 type WorkoutRow struct {
-	ID           int
+	ID           string
 	Date         string
 	Strain       float64
 	DurationMins int
@@ -107,7 +107,7 @@ func FormatWorkoutTable(workouts []models.Workout, width int) string {
 			sport = "Unknown"
 		}
 
-		row := fmt.Sprintf("%-6d %-12s %-8d %-6s %s",
+		row := fmt.Sprintf("%-6s %-12s %-8d %-6s %s",
 			w.ID, formatDate(w.Start), duration, strain, sport)
 		rows = append(rows, row)
 	}

@@ -127,8 +127,12 @@ func TestGetWorkouts(t *testing.T) {
 func TestForEachEndpoints(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		record := map[string]interface{}{"id": 1}
+		if r.URL.Path == "/v2/activity/sleep" || r.URL.Path == "/v2/activity/workout" {
+			record["id"] = "1"
+		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"records": []interface{}{map[string]interface{}{"id": 1}},
+			"records": []interface{}{record},
 		})
 	}))
 	defer server.Close()

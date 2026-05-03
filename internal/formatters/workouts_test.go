@@ -22,7 +22,7 @@ func TestFormatWorkoutData_Empty(t *testing.T) {
 func TestFormatWorkoutData_WithData(t *testing.T) {
 	workouts := []models.Workout{
 		{
-			ID:      1,
+			ID:      "1",
 			Start:   "2024-01-15T10:00:00Z",
 			End:     "2024-01-15T11:30:00Z",
 			SportID: 1,
@@ -31,7 +31,7 @@ func TestFormatWorkoutData_WithData(t *testing.T) {
 			},
 		},
 		{
-			ID:      2,
+			ID:      "2",
 			Start:   "2024-01-16T14:00:00Z",
 			End:     "2024-01-16T15:00:00Z",
 			SportID: 4,
@@ -60,14 +60,14 @@ func TestFormatWorkoutData_WithData(t *testing.T) {
 func TestFormatWorkoutTable(t *testing.T) {
 	workouts := []models.Workout{
 		{
-			ID:      7,
+			ID:      "7",
 			Start:   "2024-01-15T10:00:00Z",
 			End:     "2024-01-15T11:30:00Z",
 			SportID: 1,
 			Score:   &models.WorkoutScore{Strain: 15.5},
 		},
 		{
-			ID:      8,
+			ID:      "8",
 			Start:   "2024-01-16T10:00:00Z",
 			End:     "bad-end",
 			SportID: 999,
@@ -90,9 +90,9 @@ func TestFormatWorkoutTable_Empty(t *testing.T) {
 
 func TestFormatWorkoutSummary(t *testing.T) {
 	workouts := []models.Workout{
-		{ID: 1, Score: &models.WorkoutScore{Strain: 10}},
-		{ID: 2, Score: &models.WorkoutScore{Strain: 20}},
-		{ID: 3},
+		{ID: "1", Score: &models.WorkoutScore{Strain: 10}},
+		{ID: "2", Score: &models.WorkoutScore{Strain: 20}},
+		{ID: "3"},
 	}
 
 	got := FormatWorkoutSummary(workouts)
@@ -107,7 +107,7 @@ func TestFormatWorkoutSummary_EmptyAndUnscored(t *testing.T) {
 		t.Fatalf("FormatWorkoutSummary(nil) = %q", got)
 	}
 
-	got := FormatWorkoutSummary([]models.Workout{{ID: 1}, {ID: 2}})
+	got := FormatWorkoutSummary([]models.Workout{{ID: "1"}, {ID: "2"}})
 	want := "2 workouts | Total strain: 0.0 | Avg: 0.0"
 	if got != want {
 		t.Fatalf("FormatWorkoutSummary(unscored) = %q, want %q", got, want)
@@ -117,12 +117,12 @@ func TestFormatWorkoutSummary_EmptyAndUnscored(t *testing.T) {
 func TestFormatWorkoutData_AllScored(t *testing.T) {
 	workouts := []models.Workout{
 		{
-			ID:      1,
+			ID:      "1",
 			SportID: 1,
 			Score:   &models.WorkoutScore{Strain: 10},
 		},
 		{
-			ID:      2,
+			ID:      "2",
 			SportID: 2,
 			Score:   &models.WorkoutScore{Strain: 20},
 		},
