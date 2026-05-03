@@ -14,11 +14,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type tuiSyncRunner interface {
+	SyncAll() error
+}
+
+var (
+	tuiOpenDB     = store.Open
+	tuiDBPath     = config.DBPath
+	tuiLoadConfig = config.Load
+	tuiLoadToken  = auth.LoadToken
+	tuiTokenPath  = config.TokenPath
+	tuiNewClient  = api.NewClient
+	tuiNewSyncer  = func(client *api.Client, db *store.DB) tuiSyncRunner {
+		return gosync.New(client, db, nil)
+	}
+	tuiRunApp = tui.RunApp
+)
+
 var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Launch the interactive TUI dashboard",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := store.Open(config.DBPath())
+		db, err := tuiOpenDB(tuiDBPath())
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
@@ -26,18 +43,18 @@ var tuiCmd = &cobra.Command{
 
 		// Build sync function if credentials are available
 		var syncFn func() error
-		cfg, cfgErr := config.Load()
+		cfg, cfgErr := tuiLoadConfig()
 		if cfgErr == nil && cfg.ClientID != "" {
-			token, tokErr := auth.LoadToken(config.TokenPath())
+			token, tokErr := tuiLoadToken(tuiTokenPath())
 			if tokErr == nil {
 				oauthCfg := auth.OAuthConfig(cfg)
 				tokenSource := auth.PersistingTokenSource(
-					config.TokenPath(),
+					tuiTokenPath(),
 					oauthCfg.TokenSource(context.Background(), token),
 				)
-				client := api.NewClient(tokenSource)
+				client := tuiNewClient(tokenSource)
 				syncFn = func() error {
-					syncer := gosync.New(client, db, nil)
+					syncer := tuiNewSyncer(client, db)
 					return syncer.SyncAll()
 				}
 			}
@@ -53,7 +70,7 @@ var tuiCmd = &cobra.Command{
 
 		app.SetViews(&dashboard, &recovery, &sleep, &workouts, &correlations)
 
-		return tui.RunApp(app)
+		return tuiRunApp(app)
 	},
 }
 

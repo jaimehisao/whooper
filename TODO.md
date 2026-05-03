@@ -12,9 +12,9 @@ This backlog tracks the next production-hardening and test-improvement work.
 
 ## 2) Command-layer tests and dependency injection
 
-- [ ] Add test seams/factories in `cmd/sync.go` for OAuth token source and syncer creation.
-- [ ] Add test seams in `cmd/login.go` for OAuth flow runner and token persistence.
-- [ ] Add test seams in `cmd/tui.go` for sync function construction and app runner.
+- [x] Add test seams/factories in `cmd/sync.go` for OAuth token source and syncer creation.
+- [x] Add test seams in `cmd/login.go` for OAuth flow runner and token persistence.
+- [x] Add test seams in `cmd/tui.go` for sync function construction and app runner.
 - [ ] Add unit tests for success/failure paths in `sync`, `login`, and `tui` commands.
 
 ## 3) End-to-end smoke tests in CI

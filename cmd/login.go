@@ -8,7 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var oauthFlowFunc = auth.RunOAuthFlow
+var (
+	oauthFlowFunc = auth.RunOAuthFlow
+	saveTokenFunc = auth.SaveToken
+)
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
@@ -28,7 +31,7 @@ var loginCmd = &cobra.Command{
 			return fmt.Errorf("oauth flow: %w", err)
 		}
 
-		if err := auth.SaveToken(config.TokenPath(), token); err != nil {
+		if err := saveTokenFunc(config.TokenPath(), token); err != nil {
 			return fmt.Errorf("save token: %w", err)
 		}
 

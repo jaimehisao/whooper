@@ -18,34 +18,50 @@ var (
 	syncSince string
 )
 
+type syncRunner interface {
+	SyncFrom(string) error
+}
+
+var (
+	syncLoadConfig = config.Load
+	syncLoadToken  = auth.LoadToken
+	syncTokenPath  = config.TokenPath
+	syncDBPath     = config.DBPath
+	syncOpenDB     = store.Open
+	syncNewClient  = api.NewClient
+	syncNewSyncer  = func(client *api.Client, db *store.DB, progress gosync.ProgressFunc) syncRunner {
+		return gosync.New(client, db, progress)
+	}
+)
+
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Fetch data from the Whoop API and store locally",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		cfg, err := syncLoadConfig()
 		if err != nil {
 			return fmt.Errorf("load config: %w", err)
 		}
 
-		token, err := auth.LoadToken(config.TokenPath())
+		token, err := syncLoadToken(syncTokenPath())
 		if err != nil {
 			return fmt.Errorf("load token: %w\nRun 'whooper login' first.", err)
 		}
 
 		oauthCfg := auth.OAuthConfig(cfg)
 		tokenSource := auth.PersistingTokenSource(
-			config.TokenPath(),
+			syncTokenPath(),
 			oauthCfg.TokenSource(context.Background(), token),
 		)
 
-		client := api.NewClient(tokenSource)
-		db, err := store.Open(config.DBPath())
+		client := syncNewClient(tokenSource)
+		db, err := syncOpenDB(syncDBPath())
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
 		defer db.Close()
 
-		syncer := gosync.New(client, db, func(entity string, count int) {
+		syncer := syncNewSyncer(client, db, func(entity string, count int) {
 			fmt.Printf("  %s: %d records\n", entity, count)
 		})
 
