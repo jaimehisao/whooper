@@ -31,9 +31,9 @@ This backlog tracks the next production-hardening and test-improvement work.
 
 ## 5) Migration resilience tests
 
-- [ ] Add upgrade tests from older schema versions to current in `internal/store/migrations.go`.
-- [ ] Add idempotency test for reopening DB and rerunning migrations.
-- [ ] Assert expected index existence after migration.
+- [x] Add upgrade tests from older schema versions to current in `internal/store/migrations.go`.
+- [x] Add idempotency test for reopening DB and rerunning migrations.
+- [x] Assert expected index existence after migration.
 
 ## 6) Security testing and hardening checks
 
