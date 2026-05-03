@@ -41,6 +41,10 @@ var statusCmd = &cobra.Command{
 }
 
 func buildStatusReport() statusReport {
+	return buildStatusReportWithOpenDB(store.Open)
+}
+
+func buildStatusReportWithOpenDB(openDB func(string) (*store.DB, error)) statusReport {
 	report := statusReport{
 		ConfigPath: config.Path(),
 		DBPath:     config.DBPath(),
@@ -60,7 +64,7 @@ func buildStatusReport() statusReport {
 		report.TokenPresent = true
 	}
 
-	db, err := store.Open(config.DBPath())
+	db, err := openDB(config.DBPath())
 	if err != nil {
 		report.Errors = append(report.Errors, fmt.Sprintf("open database: %v", err))
 		return report
@@ -69,7 +73,7 @@ func buildStatusReport() statusReport {
 	report.DBOpen = true
 
 	report.RecordCounts = map[string]int{}
-	for _, table := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
+	for _, table := range statusEntities() {
 		count, err := countStatusRows(db, table)
 		if err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("count %s: %v", table, err))
@@ -79,7 +83,7 @@ func buildStatusReport() statusReport {
 	}
 
 	report.LastSync = map[string]string{}
-	for _, entity := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
+	for _, entity := range statusEntities() {
 		last, err := db.GetSyncState(entity)
 		if err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("sync state %s: %v", entity, err))
@@ -106,6 +110,10 @@ func countStatusRows(db *store.DB, entity string) (int, error) {
 	return count, err
 }
 
+func statusEntities() []string {
+	return []string{"cycles", "recoveries", "sleeps", "workouts"}
+}
+
 func writeStatusJSON(out io.Writer, report statusReport) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
@@ -124,14 +132,14 @@ func writeStatusText(out io.Writer, report statusReport) {
 
 	if len(report.RecordCounts) > 0 {
 		fmt.Fprintln(out, "Record counts:")
-		for _, entity := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
+		for _, entity := range statusEntities() {
 			fmt.Fprintf(out, "  %s: %d\n", entity, report.RecordCounts[entity])
 		}
 	}
 
 	if len(report.LastSync) > 0 {
 		fmt.Fprintln(out, "Last sync:")
-		for _, entity := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
+		for _, entity := range statusEntities() {
 			value := report.LastSync[entity]
 			if value == "" {
 				value = "never"

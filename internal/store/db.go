@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"net/url"
 
 	_ "modernc.org/sqlite"
 )
@@ -25,4 +26,22 @@ func Open(path string) (*DB, error) {
 		return nil, err
 	}
 	return store, nil
+}
+
+func OpenReadOnly(path string) (*DB, error) {
+	dsn := url.URL{Scheme: "file", Path: path}
+	query := dsn.Query()
+	query.Set("mode", "ro")
+	query.Set("_pragma", "busy_timeout(5000)")
+	dsn.RawQuery = query.Encode()
+
+	db, err := sql.Open("sqlite", dsn.String())
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &DB{db}, nil
 }

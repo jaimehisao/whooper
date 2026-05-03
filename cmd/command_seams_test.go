@@ -186,3 +186,57 @@ func TestTuiRunE_UsesInjectedRunnerAndSyncFunction(t *testing.T) {
 		t.Fatal("expected injected TUI syncer to run")
 	}
 }
+
+func TestRootRunEDelegatesToTUI(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	origOpenDB := tuiOpenDB
+	origLoadConfig := tuiLoadConfig
+	origLoadToken := tuiLoadToken
+	origNewClient := tuiNewClient
+	origNewSyncer := tuiNewSyncer
+	origRunApp := tuiRunApp
+	defer func() {
+		tuiOpenDB = origOpenDB
+		tuiLoadConfig = origLoadConfig
+		tuiLoadToken = origLoadToken
+		tuiNewClient = origNewClient
+		tuiNewSyncer = origNewSyncer
+		tuiRunApp = origRunApp
+	}()
+
+	tuiOpenDB = func(string) (*store.DB, error) {
+		return db, nil
+	}
+	tuiLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	tuiLoadToken = func(string) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "token"}, nil
+	}
+	tuiNewClient = func(oauth2.TokenSource) *api.Client {
+		return &api.Client{}
+	}
+	tuiNewSyncer = func(*api.Client, *store.DB) tuiSyncRunner {
+		return &fakeSyncAllRunner{}
+	}
+	called := false
+	tuiRunApp = func(*tui.App) error {
+		called = true
+		return nil
+	}
+
+	if err := rootCmd.RunE(rootCmd, nil); err != nil {
+		t.Fatalf("rootCmd.RunE error = %v", err)
+	}
+	if !called {
+		t.Fatal("expected root command to delegate to TUI runner")
+	}
+}

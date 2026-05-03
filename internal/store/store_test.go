@@ -1,6 +1,7 @@
 package store
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -30,6 +31,47 @@ func TestOpen_CreatesTables(t *testing.T) {
 		if err != nil {
 			t.Errorf("table %q not found: %v", table, err)
 		}
+	}
+}
+
+func TestOpenReadOnly(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := db.SaveProfile(models.Profile{UserID: 123, Email: "test@example.com", FirstName: "Jane", LastName: "Doe"}); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close writable DB: %v", err)
+	}
+
+	readOnly, err := OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatalf("OpenReadOnly: %v", err)
+	}
+	defer readOnly.Close()
+
+	profile, err := readOnly.GetProfile()
+	if err != nil {
+		t.Fatalf("GetProfile: %v", err)
+	}
+	if profile.UserID != 123 {
+		t.Fatalf("read-only profile user ID = %d, want 123", profile.UserID)
+	}
+	if err := readOnly.SaveProfile(models.Profile{UserID: 456, Email: "other@example.com"}); err == nil {
+		t.Fatal("expected write through read-only DB to fail")
+	}
+}
+
+func TestOpenReadOnlyMissingDatabase(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "missing.db")
+	if _, err := OpenReadOnly(dbPath); err == nil {
+		t.Fatal("expected OpenReadOnly to fail for missing database")
+	}
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Fatalf("OpenReadOnly should not create database, stat err = %v", err)
 	}
 }
 

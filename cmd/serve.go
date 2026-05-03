@@ -1,0 +1,176 @@
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"time"
+
+	"git.infra.hisao.org/hisao/whooper/internal/store"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/spf13/cobra"
+)
+
+const defaultServeAddr = "127.0.0.1:9464"
+
+var serveAddr = defaultServeAddr
+
+var serveListenAndServe = func(addr string, handler http.Handler) error {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	return server.ListenAndServe()
+}
+
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Run a localhost observability HTTP server",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		handler := newServeHandler(buildServeStatusReport)
+		fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", serveAddr)
+		err := serveListenAndServe(serveAddr, handler)
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	},
+}
+
+type statusReporter func() statusReport
+
+func buildServeStatusReport() statusReport {
+	return buildStatusReportWithOpenDB(store.OpenReadOnly)
+}
+
+func newServeHandler(reporter statusReporter) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", healthHandler)
+	mux.HandleFunc("/status", statusHandler(reporter))
+
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(newStatusCollector(reporter))
+	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+
+	return mux
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"status":"ok"}` + "\n"))
+}
+
+func statusHandler(reporter statusReporter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = writeStatusJSON(w, reporter())
+	}
+}
+
+type statusCollector struct {
+	reporter statusReporter
+
+	dbOpen                 *prometheus.Desc
+	tokenPresent           *prometheus.Desc
+	clientIDConfigured     *prometheus.Desc
+	clientSecretConfigured *prometheus.Desc
+	recordsTotal           *prometheus.Desc
+	lastSyncTimestamp      *prometheus.Desc
+}
+
+func newStatusCollector(reporter statusReporter) prometheus.Collector {
+	return &statusCollector{
+		reporter: reporter,
+		dbOpen: prometheus.NewDesc(
+			"whooper_db_open",
+			"Whether the Whooper SQLite database opens successfully.",
+			nil,
+			nil,
+		),
+		tokenPresent: prometheus.NewDesc(
+			"whooper_token_present",
+			"Whether a Whooper OAuth token is present.",
+			nil,
+			nil,
+		),
+		clientIDConfigured: prometheus.NewDesc(
+			"whooper_client_id_configured",
+			"Whether a Whooper client ID is configured.",
+			nil,
+			nil,
+		),
+		clientSecretConfigured: prometheus.NewDesc(
+			"whooper_client_secret_configured",
+			"Whether a Whooper client secret is configured.",
+			nil,
+			nil,
+		),
+		recordsTotal: prometheus.NewDesc(
+			"whooper_records_total",
+			"Number of locally stored Whooper records by entity.",
+			[]string{"entity"},
+			nil,
+		),
+		lastSyncTimestamp: prometheus.NewDesc(
+			"whooper_last_sync_timestamp_seconds",
+			"Last successful persisted sync timestamp by entity, or 0 if never synced or unparsable.",
+			[]string{"entity"},
+			nil,
+		),
+	}
+}
+
+func (c *statusCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.dbOpen
+	ch <- c.tokenPresent
+	ch <- c.clientIDConfigured
+	ch <- c.clientSecretConfigured
+	ch <- c.recordsTotal
+	ch <- c.lastSyncTimestamp
+}
+
+func (c *statusCollector) Collect(ch chan<- prometheus.Metric) {
+	report := c.reporter()
+	ch <- prometheus.MustNewConstMetric(c.dbOpen, prometheus.GaugeValue, boolGauge(report.DBOpen))
+	ch <- prometheus.MustNewConstMetric(c.tokenPresent, prometheus.GaugeValue, boolGauge(report.TokenPresent))
+	ch <- prometheus.MustNewConstMetric(c.clientIDConfigured, prometheus.GaugeValue, boolGauge(report.ClientIDConfigured))
+	ch <- prometheus.MustNewConstMetric(c.clientSecretConfigured, prometheus.GaugeValue, boolGauge(report.ClientSecretConfigured))
+
+	for _, entity := range statusEntities() {
+		ch <- prometheus.MustNewConstMetric(c.recordsTotal, prometheus.GaugeValue, float64(report.RecordCounts[entity]), entity)
+		ch <- prometheus.MustNewConstMetric(c.lastSyncTimestamp, prometheus.GaugeValue, syncTimestampSeconds(report.LastSync[entity]), entity)
+	}
+}
+
+func boolGauge(v bool) float64 {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func syncTimestampSeconds(value string) float64 {
+	if value == "" {
+		return 0
+	}
+	t, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return 0
+	}
+	return float64(t.Unix())
+}
+
+func init() {
+	serveCmd.Flags().StringVar(&serveAddr, "addr", defaultServeAddr, "Address to bind the observability server")
+	rootCmd.AddCommand(serveCmd)
+}
