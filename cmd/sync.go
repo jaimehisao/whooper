@@ -16,6 +16,7 @@ import (
 var (
 	syncFull  bool
 	syncSince string
+	syncDebug bool
 )
 
 type syncRunner interface {
@@ -38,15 +39,23 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Fetch data from the Whoop API and store locally",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		debugf := func(format string, args ...any) {
+			if syncDebug {
+				fmt.Fprintf(cmd.OutOrStdout(), "[debug] "+format+"\n", args...)
+			}
+		}
+
 		cfg, err := syncLoadConfig()
 		if err != nil {
 			return fmt.Errorf("load config: %w", err)
 		}
+		debugf("config loaded client_id_configured=%t client_secret_configured=%t", cfg.ClientID != "", cfg.ClientSecret != "")
 
 		token, err := syncLoadToken(syncTokenPath())
 		if err != nil {
 			return fmt.Errorf("load token: %w\nRun 'whooper login' first.", err)
 		}
+		debugf("token loaded token_path=%s", syncTokenPath())
 
 		oauthCfg := auth.OAuthConfig(cfg)
 		tokenSource := auth.PersistingTokenSource(
@@ -60,6 +69,7 @@ var syncCmd = &cobra.Command{
 			return fmt.Errorf("open database: %w", err)
 		}
 		defer db.Close()
+		debugf("database opened db_path=%s", syncDBPath())
 
 		syncer := syncNewSyncer(client, db, func(entity string, count int) {
 			fmt.Printf("  %s: %d records\n", entity, count)
@@ -76,14 +86,17 @@ var syncCmd = &cobra.Command{
 		default:
 			fmt.Println("Syncing data from Whoop...")
 		}
+		debugf("sync start=%q full=%t since=%q", start, syncFull, syncSince)
 
 		if err := syncer.SyncFrom(start); err != nil {
+			debugf("sync failed error=%q", err.Error())
 			return fmt.Errorf("sync: %w", err)
 		}
 		fmt.Println("Sync complete!")
 
 		// Check alerts
 		alerts := analysis.CheckAlerts(db, cfg)
+		debugf("alerts evaluated count=%d", len(alerts))
 		for _, a := range alerts {
 			switch a.Level {
 			case "critical":
@@ -99,5 +112,6 @@ var syncCmd = &cobra.Command{
 func init() {
 	syncCmd.Flags().BoolVar(&syncFull, "full", false, "Perform a full re-sync (ignore incremental state)")
 	syncCmd.Flags().StringVar(&syncSince, "since", "", "Sync from a specific date (YYYY-MM-DD)")
+	syncCmd.Flags().BoolVar(&syncDebug, "debug", false, "Print debug diagnostics during sync")
 	rootCmd.AddCommand(syncCmd)
 }

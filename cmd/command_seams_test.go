@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -81,6 +83,7 @@ func TestSyncRunE_UsesInjectedSyncerAndSince(t *testing.T) {
 	origNewSyncer := syncNewSyncer
 	origFull := syncFull
 	origSince := syncSince
+	origDebug := syncDebug
 	defer func() {
 		syncLoadConfig = origLoadConfig
 		syncLoadToken = origLoadToken
@@ -89,6 +92,7 @@ func TestSyncRunE_UsesInjectedSyncerAndSince(t *testing.T) {
 		syncNewSyncer = origNewSyncer
 		syncFull = origFull
 		syncSince = origSince
+		syncDebug = origDebug
 	}()
 
 	syncLoadConfig = func() (*config.Config, error) {
@@ -108,12 +112,20 @@ func TestSyncRunE_UsesInjectedSyncerAndSince(t *testing.T) {
 	}
 	syncFull = false
 	syncSince = "2024-01-15"
+	syncDebug = true
+
+	var out bytes.Buffer
+	syncCmd.SetOut(&out)
+	defer syncCmd.SetOut(nil)
 
 	if err := syncCmd.RunE(syncCmd, nil); err != nil {
 		t.Fatalf("syncCmd.RunE error = %v", err)
 	}
 	if fake.start != "2024-01-15T00:00:00.000Z" {
 		t.Fatalf("SyncFrom start = %q, want since start", fake.start)
+	}
+	if !strings.Contains(out.String(), "[debug] sync start=") {
+		t.Fatalf("expected debug sync output, got:\n%s", out.String())
 	}
 }
 
