@@ -40,15 +40,15 @@ func newSyncTestDB(t *testing.T) *store.DB {
 func TestSyncFromFullSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v1/user/profile/basic":
+		case "/v2/user/profile/basic":
 			_, _ = w.Write([]byte(`{"user_id":123,"email":"a@b.com","first_name":"A","last_name":"B"}`))
-		case "/v1/cycle":
+		case "/v2/cycle":
 			_, _ = w.Write([]byte(`{"records":[{"id":1,"user_id":123,"created_at":"2024-01-15T00:00:00Z","updated_at":"2024-01-15T00:00:00Z","start":"2024-01-15T00:00:00Z","end":"2024-01-16T00:00:00Z","days":1,"score_state":"SCORED","score":{"strain":10.1,"kilojoule":1000,"average_heart_rate":70,"max_heart_rate":150}}]}`))
-		case "/v1/recovery":
+		case "/v2/recovery":
 			_, _ = w.Write([]byte(`{"records":[{"cycle_id":1,"sleep_id":11,"user_id":123,"created_at":"2024-01-15T06:00:00Z","updated_at":"2024-01-15T06:00:00Z","score_state":"SCORED","score":{"user_calibrating":false,"recovery_score":75,"resting_heart_rate":55,"hrv_rmssd_milli":45,"spo2_percentage":97,"skin_temp_celsius":33.5}}]}`))
-		case "/v1/activity/sleep":
+		case "/v2/activity/sleep":
 			_, _ = w.Write([]byte(`{"records":[{"id":11,"user_id":123,"created_at":"2024-01-14T22:00:00Z","updated_at":"2024-01-15T06:00:00Z","start":"2024-01-14T22:00:00Z","end":"2024-01-15T06:00:00Z","nap":false,"score_state":"SCORED","score":{"stage_summary":{"total_in_bed_time_milli":28800000,"total_awake_time_milli":3600000,"total_no_data_time_milli":0,"total_light_sleep_time_milli":10000000,"total_slow_wave_sleep_time_milli":7000000,"total_rem_sleep_time_milli":7000000,"sleep_cycle_count":4,"disturbance_count":1},"sleep_needed":{"baseline_sleep_needed_milli":28800000,"need_from_sleep_debt_milli":0,"need_from_recent_strain_milli":0,"need_from_recent_nap_milli":0},"respiratory_rate":15.2,"sleep_performance_percentage":88,"sleep_consistency_percentage":85,"sleep_efficiency_percentage":87}}]}`))
-		case "/v1/activity/workout":
+		case "/v2/activity/workout":
 			_, _ = w.Write([]byte(`{"records":[{"id":99,"user_id":123,"created_at":"2024-01-15T07:00:00Z","updated_at":"2024-01-15T08:00:00Z","start":"2024-01-15T07:00:00Z","end":"2024-01-15T08:00:00Z","sport_id":0,"score_state":"SCORED","score":{"strain":11.1,"average_heart_rate":140,"max_heart_rate":170,"kilojoule":800,"percent_recorded":100,"distance_meter":5000,"altitude_gain_meter":10,"altitude_change_meter":5,"zone_duration":{"zone_zero_milli":1,"zone_one_milli":2,"zone_two_milli":3,"zone_three_milli":4,"zone_four_milli":5,"zone_five_milli":6}}}]}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -103,9 +103,9 @@ func TestSyncFromUsesOverlapStartForIncrementalSync(t *testing.T) {
 		mu.Unlock()
 
 		switch r.URL.Path {
-		case "/v1/user/profile/basic":
+		case "/v2/user/profile/basic":
 			_, _ = w.Write([]byte(`{"user_id":1,"email":"x@y.com","first_name":"X","last_name":"Y"}`))
-		case "/v1/cycle", "/v1/recovery", "/v1/activity/sleep", "/v1/activity/workout":
+		case "/v2/cycle", "/v2/recovery", "/v2/activity/sleep", "/v2/activity/workout":
 			_, _ = w.Write([]byte(`{"records":[]}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -126,20 +126,20 @@ func TestSyncFromUsesOverlapStartForIncrementalSync(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	expected := "2024-01-14T00:00:00Z"
-	if starts["/v1/cycle"] != expected {
-		t.Fatalf("cycle start query = %q, want %q", starts["/v1/cycle"], expected)
+	if starts["/v2/cycle"] != expected {
+		t.Fatalf("cycle start query = %q, want %q", starts["/v2/cycle"], expected)
 	}
 }
 
 func TestSyncFromAggregatesEntityErrors(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v1/user/profile/basic":
+		case "/v2/user/profile/basic":
 			_, _ = w.Write([]byte(`{"user_id":1,"email":"x@y.com","first_name":"X","last_name":"Y"}`))
-		case "/v1/recovery":
+		case "/v2/recovery":
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("boom"))
-		case "/v1/cycle", "/v1/activity/sleep", "/v1/activity/workout":
+		case "/v2/cycle", "/v2/activity/sleep", "/v2/activity/workout":
 			_, _ = w.Write([]byte(`{"records":[]}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -170,9 +170,9 @@ func TestSyncFromAggregatesEntityErrors(t *testing.T) {
 func TestSyncAllCallsSyncFrom(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v1/user/profile/basic":
+		case "/v2/user/profile/basic":
 			_, _ = w.Write([]byte(`{"user_id":1,"email":"x@y.com","first_name":"X","last_name":"Y"}`))
-		case "/v1/cycle", "/v1/recovery", "/v1/activity/sleep", "/v1/activity/workout":
+		case "/v2/cycle", "/v2/recovery", "/v2/activity/sleep", "/v2/activity/workout":
 			_, _ = w.Write([]byte(`{"records":[]}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)

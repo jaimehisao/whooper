@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Client) GetProfile() (*models.Profile, error) {
-	resp, err := c.R.R().Get("/v1/user/profile/basic")
+	resp, err := c.R.R().Get("/v2/user/profile/basic")
 	if err != nil {
 		return nil, fmt.Errorf("get profile: %w", err)
 	}

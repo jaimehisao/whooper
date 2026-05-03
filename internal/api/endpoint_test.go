@@ -11,7 +11,7 @@ import (
 
 func TestGetProfile_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/user/profile/basic" {
+		if r.URL.Path != "/v2/user/profile/basic" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		profile := map[string]interface{}{
