@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -28,6 +29,18 @@ type doctorDeps struct {
 	apiCheck         func(*config.Config, *oauth2.Token) error
 }
 
+type doctorCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+type doctorReport struct {
+	OK       bool          `json:"ok"`
+	Failures int           `json:"failures"`
+	Checks   []doctorCheck `json:"checks"`
+}
+
 func defaultDoctorDeps() doctorDeps {
 	return doctorDeps{
 		loadConfig:       config.Load,
@@ -52,101 +65,148 @@ func defaultDoctorDeps() doctorDeps {
 }
 
 func runDoctor(out io.Writer, deps doctorDeps, skipAPI bool) error {
-	failures := 0
-	report := func(ok bool, name string, err error) {
-		if ok {
-			fmt.Fprintf(out, "[ok]   %s\n", name)
-			return
+	return runDoctorWithFormat(out, deps, skipAPI, false)
+}
+
+func runDoctorWithFormat(out io.Writer, deps doctorDeps, skipAPI, jsonOutput bool) error {
+	report := buildDoctorReport(deps, skipAPI)
+	if jsonOutput {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			return err
 		}
-		failures++
-		fmt.Fprintf(out, "[fail] %s: %v\n", name, err)
+	} else {
+		writeDoctorText(out, report)
+	}
+
+	if !report.OK {
+		return fmt.Errorf("doctor found %d issue(s)", report.Failures)
+	}
+	return nil
+}
+
+func buildDoctorReport(deps doctorDeps, skipAPI bool) doctorReport {
+	report := doctorReport{OK: true}
+	failures := 0
+	add := func(ok bool, name string, err error) {
+		check := doctorCheck{Name: name}
+		if ok {
+			check.Status = "ok"
+		} else {
+			failures++
+			check.Status = "fail"
+			check.Error = err.Error()
+		}
+		report.Checks = append(report.Checks, check)
+	}
+	skip := func(name string) {
+		report.Checks = append(report.Checks, doctorCheck{Name: name, Status: "skip"})
 	}
 
 	cfg, err := deps.loadConfig()
 	if err != nil {
-		report(false, "load config", err)
-		return fmt.Errorf("doctor found %d issue(s)", failures)
+		add(false, "load config", err)
+		report.OK = false
+		report.Failures = failures
+		return report
 	}
-	report(true, "load config", nil)
+	add(true, "load config", nil)
 
 	if skipAPI {
-		fmt.Fprintln(out, "[skip] client-id configured (--skip-api)")
+		skip("client-id configured")
 	} else {
 		if cfg.ClientID == "" {
-			report(false, "client-id configured", fmt.Errorf("client_id is empty"))
+			add(false, "client-id configured", fmt.Errorf("client_id is empty"))
 		} else {
-			report(true, "client-id configured", nil)
+			add(true, "client-id configured", nil)
 		}
 	}
 
 	if skipAPI {
-		fmt.Fprintln(out, "[skip] client-secret configured (--skip-api)")
+		skip("client-secret configured")
 	} else {
 		if cfg.ClientSecret == "" {
-			report(false, "client-secret configured", fmt.Errorf("client_secret is empty"))
+			add(false, "client-secret configured", fmt.Errorf("client_secret is empty"))
 		} else {
-			report(true, "client-secret configured", nil)
+			add(true, "client-secret configured", nil)
 		}
 	}
 
 	if err := deps.validateRedirect(cfg.RedirectURL); err != nil {
-		report(false, "redirect URL", err)
+		add(false, "redirect URL", err)
 	} else {
-		report(true, "redirect URL", nil)
+		add(true, "redirect URL", nil)
 	}
 
 	token, err := deps.loadToken(deps.tokenPath())
 	if skipAPI {
-		fmt.Fprintln(out, "[skip] load token (--skip-api)")
+		skip("load token")
 	} else if err != nil {
-		report(false, "load token", err)
+		add(false, "load token", err)
 	} else {
-		report(true, "load token", nil)
+		add(true, "load token", nil)
 	}
 
 	db, err := deps.openDB(deps.dbPath())
 	if err != nil {
-		report(false, "open database", err)
+		add(false, "open database", err)
 	} else {
 		if pingErr := db.Ping(); pingErr != nil {
-			report(false, "database ping", pingErr)
+			add(false, "database ping", pingErr)
 		} else {
-			report(true, "database ping", nil)
+			add(true, "database ping", nil)
 		}
 		_ = db.Close()
 	}
 
 	if skipAPI {
-		fmt.Fprintln(out, "[skip] Whoop API reachability (--skip-api)")
+		skip("Whoop API reachability")
 	} else if token == nil {
-		report(false, "Whoop API reachability", fmt.Errorf("token unavailable"))
+		add(false, "Whoop API reachability", fmt.Errorf("token unavailable"))
 	} else {
 		if err := deps.apiCheck(cfg, token); err != nil {
-			report(false, "Whoop API reachability", err)
+			add(false, "Whoop API reachability", err)
 		} else {
-			report(true, "Whoop API reachability", nil)
+			add(true, "Whoop API reachability", nil)
 		}
 	}
 
-	if failures > 0 {
-		return fmt.Errorf("doctor found %d issue(s)", failures)
+	report.Failures = failures
+	report.OK = failures == 0
+	return report
+}
+
+func writeDoctorText(out io.Writer, report doctorReport) {
+	for _, check := range report.Checks {
+		switch check.Status {
+		case "ok":
+			fmt.Fprintf(out, "[ok]   %s\n", check.Name)
+		case "skip":
+			fmt.Fprintf(out, "[skip] %s\n", check.Name)
+		default:
+			fmt.Fprintf(out, "[fail] %s: %s\n", check.Name, check.Error)
+		}
 	}
 
-	fmt.Fprintln(out, "Doctor checks passed.")
-	return nil
+	if report.OK {
+		fmt.Fprintln(out, "Doctor checks passed.")
+	}
 }
 
 var doctorSkipAPI bool
+var doctorJSON bool
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Run production-readiness smoke checks",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runDoctor(cmd.OutOrStdout(), defaultDoctorDeps(), doctorSkipAPI)
+		return runDoctorWithFormat(cmd.OutOrStdout(), defaultDoctorDeps(), doctorSkipAPI, doctorJSON)
 	},
 }
 
 func init() {
 	doctorCmd.Flags().BoolVar(&doctorSkipAPI, "skip-api", false, "Skip Whoop API reachability check")
+	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Output doctor results as JSON")
 	rootCmd.AddCommand(doctorCmd)
 }

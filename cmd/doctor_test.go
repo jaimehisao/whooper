@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -133,5 +134,39 @@ func TestRunDoctorLoadConfigFailure(t *testing.T) {
 	err := runDoctor(&bytes.Buffer{}, deps, false)
 	if err == nil {
 		t.Fatal("expected error from runDoctor")
+	}
+}
+
+func TestRunDoctorJSONOutput(t *testing.T) {
+	deps := doctorDeps{
+		loadConfig: func() (*config.Config, error) {
+			return &config.Config{ClientID: "id", ClientSecret: "secret", RedirectURL: "http://localhost:8484/callback"}, nil
+		},
+		validateRedirect: func(string) error { return nil },
+		loadToken: func(string) (*oauth2.Token, error) {
+			return &oauth2.Token{AccessToken: "abc"}, nil
+		},
+		tokenPath: func() string { return "token.json" },
+		openDB: func(string) (doctorDB, error) {
+			return &fakeDoctorDB{}, nil
+		},
+		dbPath:   func() string { return "whooper.db" },
+		apiCheck: func(*config.Config, *oauth2.Token) error { return nil },
+	}
+
+	var out bytes.Buffer
+	if err := runDoctorWithFormat(&out, deps, false, true); err != nil {
+		t.Fatalf("runDoctorWithFormat json error = %v", err)
+	}
+
+	var report doctorReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("doctor JSON did not decode: %v\n%s", err, out.String())
+	}
+	if !report.OK || report.Failures != 0 {
+		t.Fatalf("unexpected report: %+v", report)
+	}
+	if len(report.Checks) == 0 || report.Checks[0].Status != "ok" {
+		t.Fatalf("expected ok checks, got %+v", report.Checks)
 	}
 }
