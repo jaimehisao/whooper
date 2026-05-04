@@ -99,6 +99,61 @@ func TestWorkoutsModel(t *testing.T) {
 	}
 }
 
+func TestWorkoutsModel_SummaryBreakdownAndDetail(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	now := time.Now().UTC()
+	runStart := now.Add(-24 * time.Hour)
+	rideStart := now.Add(-48 * time.Hour)
+	if err := db.SaveWorkouts([]models.Workout{
+		{
+			ID: "run", UserID: 123, Start: runStart.Format(time.RFC3339), End: runStart.Add(45 * time.Minute).Format(time.RFC3339),
+			SportID: 0, ScoreState: "SCORED",
+			Score: &models.WorkoutScore{
+				Strain:            12,
+				AverageHeartRate:  150,
+				MaxHeartRate:      180,
+				Kilojoule:         1000,
+				PercentRecorded:   98,
+				DistanceMeter:     8000,
+				AltitudeGainMeter: 120,
+			},
+		},
+		{
+			ID: "ride", UserID: 123, Start: rideStart.Format(time.RFC3339), End: rideStart.Add(90 * time.Minute).Format(time.RFC3339),
+			SportID: 1, ScoreState: "SCORED",
+			Score: &models.WorkoutScore{
+				Strain:           9,
+				AverageHeartRate: 130,
+				MaxHeartRate:     165,
+				DistanceMeter:    22000,
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := NewWorkouts(db)
+	pm := &m
+	pm.Update(pm.Refresh()())
+
+	view := pm.View()
+	for _, want := range []string{"Workouts: 2", "Total strain: 21.0", "Distance: 30.0 km", "Workout Strain", "Sport Breakdown", "Running", "Cycling"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("workouts view missing %q in:\n%s", want, view)
+		}
+	}
+
+	pm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	detail := pm.View()
+	for _, want := range []string{"Recorded: 98%", "Load:", "Distance: 8.0 km", "Elev Gain: 120 m"} {
+		if !strings.Contains(detail, want) {
+			t.Fatalf("workout detail missing %q in:\n%s", want, detail)
+		}
+	}
+}
+
 func TestDashboardModel(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
