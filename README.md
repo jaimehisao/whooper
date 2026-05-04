@@ -80,6 +80,63 @@ Use `doctor --skip-api` when credentials or network access are unavailable. Use 
 | `[ ]` | Change Y metric (correlations view) |
 | `q` | Quit |
 
+## Grafana and Prometheus
+
+Whooper can act as a local bridge between the Whoop API and Grafana. The primary
+path today is SQLite:
+
+```text
+Whoop API -> whooper sync -> ~/.whooper/whooper.db -> Grafana SQLite datasource
+```
+
+Run a sync, then start the bundled Grafana stack:
+
+```bash
+whooper sync
+docker compose up -d
+```
+
+Grafana is exposed at `http://localhost:3000`. The compose file installs the
+`frser-sqlite-datasource` plugin, mounts `~/.whooper/whooper.db` read-only at
+`/data/whooper.db`, provisions a `Whooper` datasource, and loads dashboards from
+`grafana/provisioning/dashboards/json`.
+
+SQLite is the best current source for historical WHOOP data because sync
+backfills records and preserves exact sleeps, recoveries, cycles, and workouts.
+Prometheus scraping is better suited to current status, health, and alerting
+metrics. The `whooper serve` command currently exposes operational endpoints:
+
+```bash
+whooper serve
+curl http://127.0.0.1:9464/healthz
+curl http://127.0.0.1:9464/status
+curl http://127.0.0.1:9464/metrics
+```
+
+The current `/metrics` endpoint reports bridge health, record counts, and sync
+timestamps. It does not yet export WHOOP health metrics such as recovery score,
+HRV, sleep, or strain as Prometheus time series.
+
+### Remote Grafana
+
+If Grafana runs on a different machine, prefer one of these setups:
+
+| Approach | Tradeoff |
+|----------|----------|
+| Run `whooper` on the Grafana host | Simplest; the SQLite database stays local to Grafana. |
+| Copy `whooper.db` to the Grafana host | Works for batch updates; copy to a temp file and atomically rename to avoid partial reads. |
+| Expose a Whooper HTTP API | Best fit for a service-style bridge; not implemented yet. |
+| Use a network database | Better for multi-host deployments than sharing SQLite over NFS. |
+
+The planned service-style bridge is:
+
+```text
+Whoop API -> whooper daemon/API -> Prometheus and/or Grafana HTTP datasource
+```
+
+That would add richer HTTP endpoints for health records and richer Prometheus
+metrics while keeping SQLite as the durable local cache.
+
 ## Architecture
 
 ```
