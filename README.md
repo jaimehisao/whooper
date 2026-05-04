@@ -156,6 +156,8 @@ The `/api/*` endpoints return JSON from the local SQLite cache. `recovery`,
 `sleep`, `strain`, and `workouts` accept an optional `limit` query parameter,
 for example `/api/sleep?limit=30`.
 
+For systemd deployment examples, see `docs/systemd.md`.
+
 ### Remote Grafana
 
 If Grafana runs on a different machine, prefer one of these setups:
