@@ -1,4 +1,20 @@
 services:
+  whooper:
+    build: .
+    environment:
+      - WHOOPER_HOME=/data
+      - WHOOPER_SYNC_INTERVAL=${WHOOPER_SYNC_INTERVAL:-30m}
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - whooper sync --loop --interval "$${WHOOPER_SYNC_INTERVAL}" & exec whooper serve --addr 0.0.0.0:9464
+    ports:
+      - "9464:9464"
+    volumes:
+      - ${WHOOPER_HOME:-${HOME}/.whooper}:/data
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -9,7 +25,7 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana-data:/var/lib/grafana
-      - ${HOME}/.whooper/whooper.db:/data/whooper.db:ro
+      - ${WHOOPER_HOME:-${HOME}/.whooper}/whooper.db:/data/whooper.db:ro
     restart: unless-stopped
 
 volumes:

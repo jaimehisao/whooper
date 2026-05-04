@@ -102,6 +102,22 @@ Grafana is exposed at `http://localhost:3000`. The compose file installs the
 `/data/whooper.db`, provisions a `Whooper` datasource, and loads dashboards from
 `grafana/provisioning/dashboards/json`.
 
+The compose stack also includes a `whooper` bridge service. It mounts the same
+data directory, keeps syncing in a loop, and exposes `/metrics` on port `9464`:
+
+```bash
+# Optional: choose a data directory other than ~/.whooper
+export WHOOPER_HOME=/var/lib/whooper
+
+# Optional: change the sync cadence
+export WHOOPER_SYNC_INTERVAL=15m
+
+docker compose up -d --build whooper grafana
+```
+
+Run `whooper login` on the host first so the mounted data directory contains a
+valid config and token.
+
 SQLite is the best current source for historical WHOOP data because sync
 backfills records and preserves exact sleeps, recoveries, cycles, and workouts.
 Prometheus scraping is better suited to current status, health, and alerting
