@@ -9,11 +9,11 @@
     {
       "title": "Recovery Score",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 0 },
       "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
       "targets": [
         {
-          "rawQueryText": "SELECT date(created_at) as time, recovery_score FROM recovery WHERE score_state = 'SCORED' ORDER BY time",
+          "rawQueryText": "SELECT day AS time, recovery_score FROM daily_recovery ORDER BY day",
           "queryType": "table",
           "refId": "A"
         }
@@ -28,51 +28,31 @@
       }
     },
     {
-      "title": "HRV (ms)",
+      "title": "HRV and Resting HR",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 0 },
       "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
       "targets": [
         {
-          "rawQueryText": "SELECT date(created_at) as time, hrv_rmssd as hrv FROM recovery WHERE score_state = 'SCORED' ORDER BY time",
+          "rawQueryText": "SELECT day AS time, hrv_rmssd AS hrv_ms, resting_heart_rate AS rhr_bpm FROM daily_recovery ORDER BY day",
           "queryType": "table",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#16A085" },
-          "unit": "ms"
-        }
-      }
-    },
-    {
-      "title": "Resting Heart Rate",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
-      "targets": [
-        {
-          "rawQueryText": "SELECT date(created_at) as time, resting_heart_rate as rhr FROM recovery WHERE score_state = 'SCORED' ORDER BY time",
-          "queryType": "table",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#FF3333" },
-          "unit": "bpm"
+          "color": { "mode": "palette-classic" }
         }
       }
     },
     {
       "title": "Daily Strain",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 0 },
       "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
       "targets": [
         {
-          "rawQueryText": "SELECT date(start) as time, strain FROM cycle WHERE score_state = 'SCORED' ORDER BY time",
+          "rawQueryText": "SELECT day AS time, strain FROM daily_strain ORDER BY day",
           "queryType": "table",
           "refId": "A"
         }
@@ -86,39 +66,58 @@
       }
     },
     {
-      "title": "Sleep Duration (hours)",
+      "title": "Sleep Actual vs Need",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
       "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
       "targets": [
         {
-          "rawQueryText": "SELECT date(start) as time, CAST(total_in_bed_time_milli - total_awake_time_milli AS REAL) / 3600000.0 as sleep_hours FROM sleep WHERE nap = 0 AND score_state = 'SCORED' ORDER BY time",
+          "rawQueryText": "SELECT day AS time, actual_hours, need_hours FROM daily_sleep ORDER BY day",
           "queryType": "table",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#5B9BD5" },
+          "color": { "mode": "palette-classic" },
           "unit": "h"
         }
       }
     },
     {
-      "title": "Sleep Efficiency (%)",
+      "title": "Sleep Need Gap",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
       "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
       "targets": [
         {
-          "rawQueryText": "SELECT date(start) as time, sleep_efficiency_pct FROM sleep WHERE nap = 0 AND score_state = 'SCORED' ORDER BY time",
+          "rawQueryText": "SELECT day AS time, need_gap_hours FROM daily_sleep ORDER BY day",
           "queryType": "table",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#9B59B6" },
+          "color": { "mode": "thresholds" },
+          "unit": "h"
+        }
+      }
+    },
+    {
+      "title": "Sleep Quality",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT day AS time, sleep_efficiency_pct AS efficiency, sleep_performance_pct AS performance, sleep_consistency_pct AS consistency FROM daily_sleep ORDER BY day",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
           "unit": "percent",
           "min": 0,
           "max": 100
@@ -126,13 +125,26 @@
       }
     },
     {
-      "title": "Workouts",
+      "title": "Workouts by Sport",
       "type": "table",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
       "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
       "targets": [
         {
-          "rawQueryText": "SELECT date(w.start) as date, w.sport_id, w.strain, w.average_heart_rate as avg_hr, w.max_heart_rate as max_hr, CAST(w.kilojoule AS INTEGER) as kcal, ROUND(w.distance_meter / 1000.0, 1) as km FROM workout w WHERE w.score_state = 'SCORED' ORDER BY w.start DESC LIMIT 50",
+          "rawQueryText": "SELECT sport_id, COUNT(*) AS workouts, ROUND(SUM(strain), 1) AS total_strain, ROUND(SUM(duration_minutes) / 60.0, 1) AS hours, ROUND(SUM(distance_km), 1) AS km FROM workout_summary WHERE day >= date('now', '-30 day') GROUP BY sport_id ORDER BY total_strain DESC",
+          "queryType": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Recent Workouts",
+      "type": "table",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 23 },
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "whooper" },
+      "targets": [
+        {
+          "rawQueryText": "SELECT day, sport_id, ROUND(strain, 1) AS strain, ROUND(duration_minutes, 0) AS minutes, average_heart_rate AS avg_hr, max_heart_rate AS max_hr, ROUND(distance_km, 1) AS km, ROUND(percent_recorded, 0) AS recorded_pct FROM workout_summary ORDER BY start DESC LIMIT 50",
           "queryType": "table",
           "refId": "A"
         }
