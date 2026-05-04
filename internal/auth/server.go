@@ -16,6 +16,7 @@ import (
 )
 
 var oauthFlowTimeout = 5 * time.Minute
+
 const oauthServerAddr = "127.0.0.1:8484"
 const callbackPath = "/callback"
 
@@ -36,6 +37,12 @@ type tokenExchanger func(ctx context.Context, code string, opts ...oauth2.AuthCo
 //  4. Waits for the callback, exchanges the code for a token.
 //  5. Shuts down the server and returns the token.
 func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
+	return RunOAuthFlowWithBrowser(oauthCfg, true)
+}
+
+// RunOAuthFlowWithBrowser performs the OAuth2 authorization-code flow and
+// optionally opens the user's browser to the authorization URL.
+func RunOAuthFlowWithBrowser(oauthCfg *oauth2.Config, openBrowser bool) (*oauth2.Token, error) {
 	if err := validateRedirectURL(oauthCfg.RedirectURL); err != nil {
 		return nil, fmt.Errorf("invalid redirect URL: %w", err)
 	}
@@ -70,8 +77,13 @@ func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 	// Open the browser to the authorization URL with PKCE.
 	authURL := oauthCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
 	fmt.Printf("Waiting for authorization on http://%s%s...\n", oauthServerAddr, callbackPath)
-	if err := openBrowserFunc(authURL); err != nil {
-		fmt.Printf("Open this URL in your browser:\n%s\n", authURL)
+	fmt.Printf("Open this URL in your browser:\n%s\n", authURL)
+	if openBrowser {
+		if err := openBrowserFunc(authURL); err != nil {
+			fmt.Printf("Could not open browser automatically: %v\n", err)
+		}
+	} else {
+		fmt.Println("Automatic browser opening disabled.")
 	}
 
 	// Wait for the callback result with a timeout.

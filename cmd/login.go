@@ -6,11 +6,13 @@ import (
 	"git.infra.hisao.org/hisao/whooper/internal/auth"
 	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"github.com/spf13/cobra"
+	"golang.org/x/oauth2"
 )
 
 var (
-	oauthFlowFunc = auth.RunOAuthFlow
-	saveTokenFunc = auth.SaveToken
+	oauthFlowFunc  = auth.RunOAuthFlow
+	saveTokenFunc  = auth.SaveToken
+	loginNoBrowser bool
 )
 
 var loginCmd = &cobra.Command{
@@ -26,7 +28,13 @@ var loginCmd = &cobra.Command{
 		}
 
 		oauthCfg := auth.OAuthConfig(cfg)
-		token, err := oauthFlowFunc(oauthCfg)
+		flow := oauthFlowFunc
+		if loginNoBrowser {
+			flow = func(cfg *oauth2.Config) (*oauth2.Token, error) {
+				return auth.RunOAuthFlowWithBrowser(cfg, false)
+			}
+		}
+		token, err := flow(oauthCfg)
 		if err != nil {
 			return fmt.Errorf("oauth flow: %w", err)
 		}
@@ -41,5 +49,6 @@ var loginCmd = &cobra.Command{
 }
 
 func init() {
+	loginCmd.Flags().BoolVar(&loginNoBrowser, "no-browser", false, "Print the authorization URL without opening a browser")
 	rootCmd.AddCommand(loginCmd)
 }
