@@ -123,6 +123,9 @@ func runSyncOnce(cmd *cobra.Command) error {
 
 	if err := syncer.SyncFrom(start); err != nil {
 		debugf("sync failed error=%q", err.Error())
+		if api.IsUnauthorized(err) {
+			return fmt.Errorf("sync: WHOOP rejected the saved token; run 'whooper login' again: %w", err)
+		}
 		return fmt.Errorf("sync: %w", err)
 	}
 	fmt.Fprintln(out, "Sync complete!")

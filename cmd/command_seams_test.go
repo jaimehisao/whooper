@@ -216,6 +216,58 @@ func TestSyncRunE_LoopRunsOnInterval(t *testing.T) {
 	}
 }
 
+func TestSyncRunE_UnauthorizedSuggestsLogin(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	fake := &fakeSyncFromRunner{err: &api.StatusError{Endpoint: "/v2/cycle", Status: 401, Body: "unauthorized"}}
+	origLoadConfig := syncLoadConfig
+	origLoadToken := syncLoadToken
+	origOpenDB := syncOpenDB
+	origNewClient := syncNewClient
+	origNewSyncer := syncNewSyncer
+	origLoop := syncLoop
+	defer func() {
+		syncLoadConfig = origLoadConfig
+		syncLoadToken = origLoadToken
+		syncOpenDB = origOpenDB
+		syncNewClient = origNewClient
+		syncNewSyncer = origNewSyncer
+		syncLoop = origLoop
+	}()
+
+	syncLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	syncLoadToken = func(string) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "token"}, nil
+	}
+	syncOpenDB = func(string) (*store.DB, error) {
+		return db, nil
+	}
+	syncNewClient = func(oauth2.TokenSource) *api.Client {
+		return &api.Client{}
+	}
+	syncNewSyncer = func(*api.Client, *store.DB, gosync.ProgressFunc) syncRunner {
+		return fake
+	}
+	syncLoop = false
+
+	err = syncCmd.RunE(syncCmd, nil)
+	if err == nil {
+		t.Fatal("expected unauthorized sync error")
+	}
+	if !strings.Contains(err.Error(), "run 'whooper login' again") {
+		t.Fatalf("expected login hint, got: %v", err)
+	}
+}
+
 func TestTuiRunE_UsesInjectedRunnerAndSyncFunction(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "whooper.db")

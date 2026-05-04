@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -11,6 +12,21 @@ const maxPages = 10000
 type paginatedResponse[T any] struct {
 	Records   []T    `json:"records"`
 	NextToken string `json:"next_token,omitempty"`
+}
+
+type StatusError struct {
+	Endpoint string
+	Status   int
+	Body     string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("fetch %s: status %d: %s", e.Endpoint, e.Status, e.Body)
+}
+
+func IsUnauthorized(err error) bool {
+	var statusErr *StatusError
+	return errors.As(err, &statusErr) && statusErr.Status == http.StatusUnauthorized
 }
 
 // FetchAll retrieves all records from a paginated Whoop API endpoint.
@@ -40,7 +56,7 @@ func FetchPaginated[T any](c *Client, endpoint string, params map[string]string,
 			return fmt.Errorf("fetch %s: %w", endpoint, err)
 		}
 		if resp.StatusCode() != http.StatusOK {
-			return fmt.Errorf("fetch %s: status %d: %s", endpoint, resp.StatusCode(), resp.String())
+			return &StatusError{Endpoint: endpoint, Status: resp.StatusCode(), Body: resp.String()}
 		}
 
 		var pr paginatedResponse[T]

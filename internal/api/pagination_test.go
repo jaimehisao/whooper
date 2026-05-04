@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -156,6 +157,23 @@ func TestFetchAll_ServerError(t *testing.T) {
 	_, err := FetchAll[testItem](client, "/items", nil)
 	if err == nil {
 		t.Fatal("expected error for server error response, got nil")
+	}
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("error type = %T, want *StatusError", err)
+	}
+	if statusErr.Status != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", statusErr.Status)
+	}
+}
+
+func TestIsUnauthorized(t *testing.T) {
+	err := fmt.Errorf("wrapped: %w", &StatusError{Endpoint: "/items", Status: http.StatusUnauthorized})
+	if !IsUnauthorized(err) {
+		t.Fatal("expected wrapped 401 status error to be unauthorized")
+	}
+	if IsUnauthorized(&StatusError{Endpoint: "/items", Status: http.StatusForbidden}) {
+		t.Fatal("403 should not be unauthorized")
 	}
 }
 
