@@ -128,6 +128,11 @@ whooper serve
 curl http://127.0.0.1:9464/healthz
 curl http://127.0.0.1:9464/status
 curl http://127.0.0.1:9464/metrics
+curl http://127.0.0.1:9464/api/summary
+curl http://127.0.0.1:9464/api/recovery
+curl http://127.0.0.1:9464/api/sleep
+curl http://127.0.0.1:9464/api/strain
+curl http://127.0.0.1:9464/api/workouts
 ```
 
 The `/metrics` endpoint reports bridge health, record counts, sync timestamps,
@@ -147,6 +152,10 @@ whooper serve --addr 0.0.0.0:9464
 
 Then point Prometheus at `http://<host>:9464/metrics`.
 
+The `/api/*` endpoints return JSON from the local SQLite cache. `recovery`,
+`sleep`, `strain`, and `workouts` accept an optional `limit` query parameter,
+for example `/api/sleep?limit=30`.
+
 ### Remote Grafana
 
 If Grafana runs on a different machine, prefer one of these setups:
@@ -155,7 +164,7 @@ If Grafana runs on a different machine, prefer one of these setups:
 |----------|----------|
 | Run `whooper` on the Grafana host | Simplest; the SQLite database stays local to Grafana. |
 | Copy `whooper.db` to the Grafana host | Works for batch updates; copy to a temp file and atomically rename to avoid partial reads. |
-| Expose a Whooper HTTP API | Best fit for a service-style bridge; not implemented yet. |
+| Expose a Whooper HTTP API | Best fit for a service-style bridge; available through `whooper serve`. |
 | Use a network database | Better for multi-host deployments than sharing SQLite over NFS. |
 
 The planned service-style bridge is:

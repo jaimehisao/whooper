@@ -50,6 +50,11 @@ func newServeHandler(reporter statusReporter) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
 	mux.HandleFunc("/status", statusHandler(reporter))
+	mux.HandleFunc("/api/summary", apiSummaryHandler(reporter))
+	mux.HandleFunc("/api/recovery", apiRowsHandler(`SELECT * FROM daily_recovery ORDER BY day DESC LIMIT ?`, limitArg))
+	mux.HandleFunc("/api/sleep", apiRowsHandler(`SELECT * FROM daily_sleep ORDER BY day DESC LIMIT ?`, limitArg))
+	mux.HandleFunc("/api/strain", apiRowsHandler(`SELECT * FROM daily_strain ORDER BY day DESC LIMIT ?`, limitArg))
+	mux.HandleFunc("/api/workouts", apiRowsHandler(`SELECT * FROM workout_summary ORDER BY start DESC LIMIT ?`, limitArg))
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(newStatusCollector(reporter))

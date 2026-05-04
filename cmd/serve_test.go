@@ -67,6 +67,74 @@ func TestServeStatus(t *testing.T) {
 	}
 }
 
+func TestServeAPIEndpoints(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	if err := config.Save(&config.Config{ClientID: "id", ClientSecret: "secret"}); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	if err := db.SaveRecoveries([]models.Recovery{{
+		CycleID: 1, UserID: 1, CreatedAt: "2024-01-02T07:00:00Z", ScoreState: "SCORED",
+		Score: &models.RecoveryScore{RecoveryScore: 81, HRVRmssd: 45, RestingHeartRate: 55},
+	}}); err != nil {
+		t.Fatalf("SaveRecoveries: %v", err)
+	}
+	if err := db.SaveSleeps([]models.Sleep{{
+		ID: "sleep-1", UserID: 1, Start: "2024-01-02T00:00:00Z", ScoreState: "SCORED",
+		Score: &models.SleepScore{
+			StageSummary: models.SleepStageSummary{
+				TotalInBedTimeMilli: 8 * 3600 * 1000,
+				TotalAwakeTimeMilli: 30 * 60 * 1000,
+			},
+			SleepNeeded:        models.SleepNeeded{BaselineMilli: 8 * 3600 * 1000},
+			SleepEfficiencyPct: 94,
+		},
+	}}); err != nil {
+		t.Fatalf("SaveSleeps: %v", err)
+	}
+	if err := db.SaveCycles([]models.Cycle{{
+		ID: 1, UserID: 1, Start: "2024-01-02T00:00:00Z", ScoreState: "SCORED",
+		Score: &models.CycleScore{Strain: 12.4},
+	}}); err != nil {
+		t.Fatalf("SaveCycles: %v", err)
+	}
+	if err := db.SaveWorkouts([]models.Workout{{
+		ID: "workout-1", UserID: 1, Start: "2024-01-02T17:00:00Z", End: "2024-01-02T18:00:00Z", SportID: 0, ScoreState: "SCORED",
+		Score: &models.WorkoutScore{Strain: 9.1, AverageHeartRate: 140, MaxHeartRate: 178, DistanceMeter: 5000},
+	}}); err != nil {
+		t.Fatalf("SaveWorkouts: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close DB: %v", err)
+	}
+
+	handler := newServeHandler(buildServeStatusReport)
+	tests := map[string]string{
+		"/api/summary":  `"latest_health"`,
+		"/api/recovery": `"recovery_score": 81`,
+		"/api/sleep":    `"actual_hours": 7.5`,
+		"/api/strain":   `"strain": 12.4`,
+		"/api/workouts": `"distance_km": 5`,
+	}
+	for path, want := range tests {
+		req := httptest.NewRequest(http.MethodGet, path+"?limit=1", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, body:\n%s", path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("GET %s missing %q:\n%s", path, want, rec.Body.String())
+		}
+	}
+}
+
 func TestServeMetricsFromStatusReport(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "whooper.db")
