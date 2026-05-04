@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,7 +23,13 @@ type statusReport struct {
 	DBOpen                 bool              `json:"db_open"`
 	RecordCounts           map[string]int    `json:"record_counts,omitempty"`
 	LastSync               map[string]string `json:"last_sync,omitempty"`
+	LatestHealth           *healthReport     `json:"latest_health,omitempty"`
 	Errors                 []string          `json:"errors,omitempty"`
+}
+
+type healthReport struct {
+	Values     map[string]float64 `json:"values,omitempty"`
+	Timestamps map[string]string  `json:"timestamps,omitempty"`
 }
 
 var statusJSON bool
@@ -92,6 +99,13 @@ func buildStatusReportWithOpenDB(openDB func(string) (*store.DB, error)) statusR
 		report.LastSync[entity] = last
 	}
 
+	latest, err := latestHealthReport(db)
+	if err != nil {
+		report.Errors = append(report.Errors, fmt.Sprintf("latest health: %v", err))
+	} else if len(latest.Values) > 0 {
+		report.LatestHealth = latest
+	}
+
 	return report
 }
 
@@ -112,6 +126,119 @@ func countStatusRows(db *store.DB, entity string) (int, error) {
 
 func statusEntities() []string {
 	return []string{"cycles", "recoveries", "sleeps", "workouts"}
+}
+
+func latestHealthReport(db *store.DB) (*healthReport, error) {
+	report := &healthReport{
+		Values:     map[string]float64{},
+		Timestamps: map[string]string{},
+	}
+
+	if err := addLatestRecoveryMetrics(db, report); err != nil {
+		return nil, err
+	}
+	if err := addLatestSleepMetrics(db, report); err != nil {
+		return nil, err
+	}
+	if err := addLatestStrainMetrics(db, report); err != nil {
+		return nil, err
+	}
+	if err := addLatestWorkoutMetrics(db, report); err != nil {
+		return nil, err
+	}
+	return report, nil
+}
+
+func addLatestRecoveryMetrics(db *store.DB, report *healthReport) error {
+	var date string
+	var recovery, hrv, rhr float64
+	err := db.QueryRow(`SELECT date(created_at), recovery_score, hrv_rmssd, resting_heart_rate
+		FROM recovery
+		WHERE score_state = 'SCORED'
+		ORDER BY created_at DESC
+		LIMIT 1`).Scan(&date, &recovery, &hrv, &rhr)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("latest recovery: %w", err)
+	}
+	report.Values["recovery_score"] = recovery
+	report.Values["hrv_rmssd"] = hrv
+	report.Values["resting_heart_rate"] = rhr
+	report.Timestamps["recovery"] = date
+	return nil
+}
+
+func addLatestSleepMetrics(db *store.DB, report *healthReport) error {
+	var date string
+	var actualHours, needHours, efficiency, performance, consistency float64
+	err := db.QueryRow(`SELECT date(start),
+			(total_in_bed_time_milli - total_awake_time_milli) / 3600000.0,
+			(baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli) / 3600000.0,
+			sleep_efficiency_pct,
+			sleep_performance_pct,
+			sleep_consistency_pct
+		FROM sleep
+		WHERE nap = 0 AND score_state = 'SCORED'
+		ORDER BY start DESC
+		LIMIT 1`).Scan(&date, &actualHours, &needHours, &efficiency, &performance, &consistency)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("latest sleep: %w", err)
+	}
+	report.Values["sleep_actual_hours"] = actualHours
+	report.Values["sleep_need_hours"] = needHours
+	report.Values["sleep_need_gap_hours"] = actualHours - needHours
+	report.Values["sleep_efficiency_pct"] = efficiency
+	report.Values["sleep_performance_pct"] = performance
+	report.Values["sleep_consistency_pct"] = consistency
+	report.Timestamps["sleep"] = date
+	return nil
+}
+
+func addLatestStrainMetrics(db *store.DB, report *healthReport) error {
+	var date string
+	var strain float64
+	err := db.QueryRow(`SELECT date(start), strain
+		FROM cycle
+		WHERE score_state = 'SCORED'
+		ORDER BY start DESC
+		LIMIT 1`).Scan(&date, &strain)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("latest strain: %w", err)
+	}
+	report.Values["day_strain"] = strain
+	report.Timestamps["strain"] = date
+	return nil
+}
+
+func addLatestWorkoutMetrics(db *store.DB, report *healthReport) error {
+	var date string
+	var strain, distanceKm float64
+	var avgHR, maxHR int
+	err := db.QueryRow(`SELECT date(start), strain, average_heart_rate, max_heart_rate, distance_meter / 1000.0
+		FROM workout
+		WHERE score_state = 'SCORED'
+		ORDER BY start DESC
+		LIMIT 1`).Scan(&date, &strain, &avgHR, &maxHR, &distanceKm)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("latest workout: %w", err)
+	}
+	report.Values["workout_strain"] = strain
+	report.Values["workout_average_heart_rate"] = float64(avgHR)
+	report.Values["workout_max_heart_rate"] = float64(maxHR)
+	report.Values["workout_distance_km"] = distanceKm
+	report.Timestamps["workout"] = date
+	return nil
 }
 
 func writeStatusJSON(out io.Writer, report statusReport) error {

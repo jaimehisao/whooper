@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"git.infra.hisao.org/hisao/whooper/internal/store"
@@ -86,6 +87,8 @@ type statusCollector struct {
 	clientSecretConfigured *prometheus.Desc
 	recordsTotal           *prometheus.Desc
 	lastSyncTimestamp      *prometheus.Desc
+	latestHealthMetric     *prometheus.Desc
+	latestHealthTimestamp  *prometheus.Desc
 }
 
 func newStatusCollector(reporter statusReporter) prometheus.Collector {
@@ -127,6 +130,18 @@ func newStatusCollector(reporter statusReporter) prometheus.Collector {
 			[]string{"entity"},
 			nil,
 		),
+		latestHealthMetric: prometheus.NewDesc(
+			"whooper_latest_health_metric",
+			"Latest locally cached WHOOP health metric value.",
+			[]string{"metric"},
+			nil,
+		),
+		latestHealthTimestamp: prometheus.NewDesc(
+			"whooper_latest_health_timestamp_seconds",
+			"Timestamp for the latest locally cached WHOOP health metric group.",
+			[]string{"entity"},
+			nil,
+		),
 	}
 }
 
@@ -137,6 +152,8 @@ func (c *statusCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.clientSecretConfigured
 	ch <- c.recordsTotal
 	ch <- c.lastSyncTimestamp
+	ch <- c.latestHealthMetric
+	ch <- c.latestHealthTimestamp
 }
 
 func (c *statusCollector) Collect(ch chan<- prometheus.Metric) {
@@ -149,6 +166,26 @@ func (c *statusCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, entity := range statusEntities() {
 		ch <- prometheus.MustNewConstMetric(c.recordsTotal, prometheus.GaugeValue, float64(report.RecordCounts[entity]), entity)
 		ch <- prometheus.MustNewConstMetric(c.lastSyncTimestamp, prometheus.GaugeValue, syncTimestampSeconds(report.LastSync[entity]), entity)
+	}
+
+	if report.LatestHealth != nil {
+		metrics := make([]string, 0, len(report.LatestHealth.Values))
+		for metric := range report.LatestHealth.Values {
+			metrics = append(metrics, metric)
+		}
+		sort.Strings(metrics)
+		for _, metric := range metrics {
+			ch <- prometheus.MustNewConstMetric(c.latestHealthMetric, prometheus.GaugeValue, report.LatestHealth.Values[metric], metric)
+		}
+
+		entities := make([]string, 0, len(report.LatestHealth.Timestamps))
+		for entity := range report.LatestHealth.Timestamps {
+			entities = append(entities, entity)
+		}
+		sort.Strings(entities)
+		for _, entity := range entities {
+			ch <- prometheus.MustNewConstMetric(c.latestHealthTimestamp, prometheus.GaugeValue, healthTimestampSeconds(report.LatestHealth.Timestamps[entity]), entity)
+		}
 	}
 }
 
@@ -168,6 +205,16 @@ func syncTimestampSeconds(value string) float64 {
 		return 0
 	}
 	return float64(t.Unix())
+}
+
+func healthTimestampSeconds(value string) float64 {
+	if value == "" {
+		return 0
+	}
+	if t, err := time.Parse("2006-01-02", value); err == nil {
+		return float64(t.Unix())
+	}
+	return syncTimestampSeconds(value)
 }
 
 func init() {

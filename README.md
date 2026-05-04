@@ -42,6 +42,7 @@ whooper
 | `whooper login` | OAuth2 browser login flow |
 | `whooper sync` | Fetch latest data from Whoop API |
 | `whooper sync --debug` | Fetch data with local diagnostic output |
+| `whooper sync --loop --interval 30m` | Keep syncing in the foreground on an interval |
 | `whooper config` | Show current configuration |
 | `whooper config set <key> <value>` | Set config (client-id, client-secret, redirect-url) |
 | `whooper doctor --json` | Run machine-readable readiness checks |
@@ -113,9 +114,22 @@ curl http://127.0.0.1:9464/status
 curl http://127.0.0.1:9464/metrics
 ```
 
-The current `/metrics` endpoint reports bridge health, record counts, and sync
-timestamps. It does not yet export WHOOP health metrics such as recovery score,
-HRV, sleep, or strain as Prometheus time series.
+The `/metrics` endpoint reports bridge health, record counts, sync timestamps,
+and latest cached WHOOP health gauges. Health gauges are exposed as
+`whooper_latest_health_metric{metric="..."}` for values such as
+`recovery_score`, `hrv_rmssd`, `resting_heart_rate`, `sleep_actual_hours`,
+`sleep_need_hours`, `sleep_need_gap_hours`, `sleep_efficiency_pct`,
+`sleep_performance_pct`, `sleep_consistency_pct`, `day_strain`,
+`workout_strain`, and workout heart-rate/distance metrics.
+
+For a simple background bridge on a host, run:
+
+```bash
+whooper sync --loop --interval 30m
+whooper serve --addr 0.0.0.0:9464
+```
+
+Then point Prometheus at `http://<host>:9464/metrics`.
 
 ### Remote Grafana
 

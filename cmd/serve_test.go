@@ -85,6 +85,41 @@ func TestServeMetricsFromStatusReport(t *testing.T) {
 	if err := db.SaveCycles([]models.Cycle{{ID: 1, UserID: 1, Start: "2024-01-01T00:00:00Z"}}); err != nil {
 		t.Fatalf("SaveCycles: %v", err)
 	}
+	if err := db.SaveRecoveries([]models.Recovery{{
+		CycleID: 1, UserID: 1, CreatedAt: "2024-01-02T07:00:00Z", ScoreState: "SCORED",
+		Score: &models.RecoveryScore{RecoveryScore: 81, HRVRmssd: 45, RestingHeartRate: 55},
+	}}); err != nil {
+		t.Fatalf("SaveRecoveries: %v", err)
+	}
+	if err := db.SaveSleeps([]models.Sleep{{
+		ID: "sleep-1", UserID: 1, Start: "2024-01-02T00:00:00Z", ScoreState: "SCORED",
+		Score: &models.SleepScore{
+			StageSummary: models.SleepStageSummary{
+				TotalInBedTimeMilli: 8 * 3600 * 1000,
+				TotalAwakeTimeMilli: 30 * 60 * 1000,
+			},
+			SleepNeeded: models.SleepNeeded{
+				BaselineMilli: 8 * 3600 * 1000,
+			},
+			SleepEfficiencyPct:  94,
+			SleepPerformancePct: 88,
+			SleepConsistencyPct: 76,
+		},
+	}}); err != nil {
+		t.Fatalf("SaveSleeps: %v", err)
+	}
+	if err := db.SaveCycles([]models.Cycle{{
+		ID: 2, UserID: 1, Start: "2024-01-02T00:00:00Z", ScoreState: "SCORED",
+		Score: &models.CycleScore{Strain: 12.4},
+	}}); err != nil {
+		t.Fatalf("SaveCycles scored: %v", err)
+	}
+	if err := db.SaveWorkouts([]models.Workout{{
+		ID: "workout-1", UserID: 1, Start: "2024-01-02T17:00:00Z", End: "2024-01-02T18:00:00Z", ScoreState: "SCORED",
+		Score: &models.WorkoutScore{Strain: 9.1, AverageHeartRate: 140, MaxHeartRate: 178, DistanceMeter: 5000},
+	}}); err != nil {
+		t.Fatalf("SaveWorkouts: %v", err)
+	}
 	if err := db.SetSyncState("cycles", "2024-01-02T00:00:00Z"); err != nil {
 		t.Fatalf("SetSyncState: %v", err)
 	}
@@ -103,9 +138,16 @@ func TestServeMetricsFromStatusReport(t *testing.T) {
 		"whooper_token_present 1",
 		"whooper_client_id_configured 1",
 		"whooper_client_secret_configured 1",
-		`whooper_records_total{entity="cycles"} 1`,
+		`whooper_records_total{entity="cycles"} 2`,
 		`whooper_last_sync_timestamp_seconds{entity="cycles"} 1.7041536e+09`,
-		`whooper_records_total{entity="recoveries"} 0`,
+		`whooper_records_total{entity="recoveries"} 1`,
+		`whooper_latest_health_metric{metric="recovery_score"} 81`,
+		`whooper_latest_health_metric{metric="hrv_rmssd"} 45`,
+		`whooper_latest_health_metric{metric="sleep_actual_hours"} 7.5`,
+		`whooper_latest_health_metric{metric="sleep_need_gap_hours"} -0.5`,
+		`whooper_latest_health_metric{metric="day_strain"} 12.4`,
+		`whooper_latest_health_metric{metric="workout_distance_km"} 5`,
+		`whooper_latest_health_timestamp_seconds{entity="sleep"} 1.7041536e+09`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("GET /metrics missing %q:\n%s", want, body)

@@ -49,8 +49,8 @@ This backlog tracks the next production-hardening and test-improvement work.
 
 ## 8) Grafana bridge and service mode
 
-- [ ] Add `whooper sync --loop --interval <duration>` or a dedicated daemon command for background syncing.
+- [x] Add `whooper sync --loop --interval <duration>` or a dedicated daemon command for background syncing.
 - [ ] Add HTTP API endpoints for Grafana-friendly health data queries backed by the local SQLite cache.
-- [ ] Expand `/metrics` beyond bridge health to include latest recovery, HRV, RHR, sleep, strain, and workout summary gauges.
+- [x] Expand `/metrics` beyond bridge health to include latest recovery, HRV, RHR, sleep, strain, and workout summary gauges.
 - [ ] Document Prometheus scrape configuration and Grafana dashboard setup for service-mode deployments.
 - [ ] Add SQL views or stable query examples for Grafana panels (`daily_recovery`, `daily_sleep`, `daily_strain`, `workout_summary`).
