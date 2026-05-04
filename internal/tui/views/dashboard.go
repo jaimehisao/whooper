@@ -23,6 +23,9 @@ type DashboardModel struct {
 	sleepHours     float64
 	sleepEffPct    float64
 	dayStrain      float64
+	recoveryDate   string
+	sleepDate      string
+	strainDate     string
 	sparklineData  []float64
 	recentWorkouts []models.Workout
 	alerts         []string
@@ -35,16 +38,19 @@ func NewDashboard(db *store.DB) DashboardModel {
 }
 
 type dashboardDataMsg struct {
-	recovery  float64
-	hrv       float64
-	rhr       float64
-	sleepHrs  float64
-	sleepEff  float64
-	strain    float64
-	sparkline []float64
-	workouts  []models.Workout
-	alerts    []string
-	err       string
+	recovery   float64
+	hrv        float64
+	rhr        float64
+	sleepHrs   float64
+	sleepEff   float64
+	strain     float64
+	recDate    string
+	sleepDate  string
+	strainDate string
+	sparkline  []float64
+	workouts   []models.Workout
+	alerts     []string
+	err        string
 }
 
 func (m *DashboardModel) Init() tea.Cmd {
@@ -55,34 +61,40 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 	db := m.db
 	return func() tea.Msg {
 		now := time.Now().UTC()
-		today := now.Format("2006-01-02")
 		weekAgo := now.Add(-7 * 24 * time.Hour).Format("2006-01-02")
+		monthAgo := now.Add(-30 * 24 * time.Hour).Format("2006-01-02")
 
 		msg := dashboardDataMsg{}
 		var errs []string
 
-		recoveries, err := db.GetRecoveryTrend(today, "")
+		recoveries, err := db.GetRecoveryTrend(monthAgo, "")
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("recovery: %v", err))
 		} else if len(recoveries) > 0 {
-			msg.recovery = recoveries[0].RecoveryScore
-			msg.hrv = recoveries[0].HRV
-			msg.rhr = recoveries[0].RHR
+			latest := recoveries[len(recoveries)-1]
+			msg.recovery = latest.RecoveryScore
+			msg.hrv = latest.HRV
+			msg.rhr = latest.RHR
+			msg.recDate = latest.Date
 		}
 
-		sleeps, err := db.GetSleepTrend(today, "")
+		sleeps, err := db.GetSleepTrend(monthAgo, "")
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("sleep: %v", err))
 		} else if len(sleeps) > 0 {
-			msg.sleepHrs = float64(sleeps[0].DurationMilli) / 3600000.0
-			msg.sleepEff = sleeps[0].EfficiencyPct
+			latest := sleeps[len(sleeps)-1]
+			msg.sleepHrs = float64(latest.DurationMilli) / 3600000.0
+			msg.sleepEff = latest.EfficiencyPct
+			msg.sleepDate = latest.Date
 		}
 
-		strains, err := db.GetStrainTrend(today, "")
+		strains, err := db.GetStrainTrend(monthAgo, "")
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("strain: %v", err))
 		} else if len(strains) > 0 {
-			msg.strain = strains[0].Strain
+			latest := strains[len(strains)-1]
+			msg.strain = latest.Strain
+			msg.strainDate = latest.Date
 		}
 
 		weekRecoveries, err := db.GetRecoveryTrend(weekAgo, "")
@@ -127,6 +139,9 @@ func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sleepHours = msg.sleepHrs
 		m.sleepEffPct = msg.sleepEff
 		m.dayStrain = msg.strain
+		m.recoveryDate = msg.recDate
+		m.sleepDate = msg.sleepDate
+		m.strainDate = msg.strainDate
 		m.sparklineData = msg.sparkline
 		m.recentWorkouts = msg.workouts
 		m.alerts = msg.alerts
@@ -156,6 +171,11 @@ func (m *DashboardModel) View() string {
 
 	gauge := components.Gauge(m.recoveryScore, sparkW)
 	sections = append(sections, tui.BoxStyle.Render(gauge))
+
+	dateLine := latestDateLine(m.recoveryDate, m.sleepDate, m.strainDate)
+	if dateLine != "" {
+		sections = append(sections, tui.MutedStyle.Render(dateLine))
+	}
 
 	metrics := fmt.Sprintf(
 		"%s  %s  %s  %s",
@@ -194,6 +214,31 @@ func (m *DashboardModel) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func latestDateLine(recoveryDate, sleepDate, strainDate string) string {
+	parts := make([]string, 0, 3)
+	if recoveryDate != "" {
+		parts = append(parts, "recovery "+formatDashboardDate(recoveryDate))
+	}
+	if sleepDate != "" {
+		parts = append(parts, "sleep "+formatDashboardDate(sleepDate))
+	}
+	if strainDate != "" {
+		parts = append(parts, "strain "+formatDashboardDate(strainDate))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Latest scored: " + strings.Join(parts, " | ")
+}
+
+func formatDashboardDate(raw string) string {
+	t, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return raw
+	}
+	return t.Format("Jan 02")
 }
 
 func (m *DashboardModel) sparkWidth() int {

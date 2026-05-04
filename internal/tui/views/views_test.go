@@ -141,6 +141,46 @@ func TestDashboardModel(t *testing.T) {
 	}
 }
 
+func TestDashboardModel_UsesLatestRecentScores(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	now := time.Now().UTC()
+	yesterday := now.Add(-24 * time.Hour).Format(time.RFC3339)
+
+	db.SaveRecoveries([]models.Recovery{
+		{CycleID: 1, UserID: 123, CreatedAt: yesterday, ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 72, HRVRmssd: 44, RestingHeartRate: 57}},
+	})
+	db.SaveSleeps([]models.Sleep{
+		{ID: "1", UserID: 123, Start: yesterday, ScoreState: "SCORED", Score: &models.SleepScore{
+			StageSummary:       models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000, TotalAwakeTimeMilli: 30 * 60 * 1000},
+			SleepEfficiencyPct: 93,
+		}},
+	})
+	db.SaveCycles([]models.Cycle{
+		{ID: 1, UserID: 123, Start: yesterday, ScoreState: "SCORED", Score: &models.CycleScore{Strain: 11.2}},
+	})
+
+	m := NewDashboard(db)
+	pm := &m
+	pm.Update(pm.Refresh()())
+
+	if pm.recoveryScore != 72 {
+		t.Errorf("Expected recovery 72, got %.0f", pm.recoveryScore)
+	}
+	if pm.sleepHours == 0 {
+		t.Error("Expected latest sleep hours to be populated")
+	}
+	if pm.dayStrain != 11.2 {
+		t.Errorf("Expected strain 11.2, got %.1f", pm.dayStrain)
+	}
+
+	view := pm.View()
+	if !strings.Contains(view, "Latest scored:") {
+		t.Errorf("Expected latest scored date line, got: %s", view)
+	}
+}
+
 func TestRecoveryModel(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
