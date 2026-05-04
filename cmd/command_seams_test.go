@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/oauth2"
@@ -21,10 +22,12 @@ import (
 type fakeSyncFromRunner struct {
 	start string
 	err   error
+	calls int
 }
 
 func (f *fakeSyncFromRunner) SyncFrom(start string) error {
 	f.start = start
+	f.calls++
 	return f.err
 }
 
@@ -127,6 +130,89 @@ func TestSyncRunE_UsesInjectedSyncerAndSince(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "[debug] sync start=") {
 		t.Fatalf("expected debug sync output, got:\n%s", out.String())
+	}
+}
+
+func TestSyncRunE_LoopRunsOnInterval(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	fake := &fakeSyncFromRunner{}
+	origLoadConfig := syncLoadConfig
+	origLoadToken := syncLoadToken
+	origOpenDB := syncOpenDB
+	origNewClient := syncNewClient
+	origNewSyncer := syncNewSyncer
+	origLoop := syncLoop
+	origInterval := syncInterval
+	origIterations := syncLoopIterations
+	origSleep := syncSleep
+	origFull := syncFull
+	origSince := syncSince
+	defer func() {
+		syncLoadConfig = origLoadConfig
+		syncLoadToken = origLoadToken
+		syncOpenDB = origOpenDB
+		syncNewClient = origNewClient
+		syncNewSyncer = origNewSyncer
+		syncLoop = origLoop
+		syncInterval = origInterval
+		syncLoopIterations = origIterations
+		syncSleep = origSleep
+		syncFull = origFull
+		syncSince = origSince
+	}()
+
+	syncLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	syncLoadToken = func(string) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "token"}, nil
+	}
+	syncOpenDB = func(string) (*store.DB, error) {
+		return db, nil
+	}
+	syncNewClient = func(oauth2.TokenSource) *api.Client {
+		return &api.Client{}
+	}
+	syncNewSyncer = func(*api.Client, *store.DB, gosync.ProgressFunc) syncRunner {
+		return fake
+	}
+	syncLoop = true
+	syncInterval = time.Second
+	syncLoopIterations = 2
+	syncFull = false
+	syncSince = ""
+
+	sleepCalls := 0
+	syncSleep = func(d time.Duration) {
+		sleepCalls++
+		if d != time.Second {
+			t.Fatalf("sleep duration = %s, want 1s", d)
+		}
+	}
+
+	var out bytes.Buffer
+	syncCmd.SetOut(&out)
+	defer syncCmd.SetOut(nil)
+
+	if err := syncCmd.RunE(syncCmd, nil); err != nil {
+		t.Fatalf("syncCmd.RunE error = %v", err)
+	}
+	if fake.calls != 2 {
+		t.Fatalf("SyncFrom calls = %d, want 2", fake.calls)
+	}
+	if sleepCalls != 1 {
+		t.Fatalf("sleep calls = %d, want 1", sleepCalls)
+	}
+	if !strings.Contains(out.String(), "Next sync in 1s") {
+		t.Fatalf("expected loop output, got:\n%s", out.String())
 	}
 }
 
