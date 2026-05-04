@@ -17,6 +17,19 @@ func TestDir(t *testing.T) {
 	}
 }
 
+func TestDirUsesWhooperHome(t *testing.T) {
+	origDir := dirFunc
+	dirFunc = defaultDir
+	t.Cleanup(func() { dirFunc = origDir })
+
+	tmpDir := t.TempDir()
+	t.Setenv("WHOOPER_HOME", tmpDir)
+
+	if got := Dir(); got != tmpDir {
+		t.Errorf("Dir() = %s, want WHOOPER_HOME %s", got, tmpDir)
+	}
+}
+
 func TestPath(t *testing.T) {
 	want := filepath.Join(Dir(), "config.yaml")
 	if got := Path(); got != want {
@@ -219,7 +232,7 @@ func TestSaveError(t *testing.T) {
 	if err := os.WriteFile(tmpFile, []byte(""), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	origDir := dirFunc
 	dirFunc = func() string { return filepath.Join(tmpFile, "subdir") }
 	defer func() { dirFunc = origDir }()

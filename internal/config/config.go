@@ -20,10 +20,15 @@ type Alerts struct {
 	Enabled     bool    `yaml:"enabled"`
 }
 
-var dirFunc = func() string {
+func defaultDir() string {
+	if dir := os.Getenv("WHOOPER_HOME"); dir != "" {
+		return dir
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".whooper")
 }
+
+var dirFunc = defaultDir
 
 func Dir() string {
 	return dirFunc()

@@ -478,6 +478,14 @@ All data is stored in `~/.whooper/`:
 | `token.json` | OAuth2 access/refresh tokens |
 | `whooper.db` | SQLite database |
 
+Set `WHOOPER_HOME` to use a different data directory. This is useful for
+containers, systemd services, and hosts where Grafana should read from a
+specific volume:
+
+```bash
+WHOOPER_HOME=/var/lib/whooper whooper sync
+```
+
 ## Operations
 
 ### Supported Runtime
