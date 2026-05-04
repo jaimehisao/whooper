@@ -261,6 +261,75 @@ func TestSleepModel(t *testing.T) {
 	}
 }
 
+func TestSleepModel_SummaryAndRecentTable(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	now := time.Now().UTC()
+	db.SaveSleeps([]models.Sleep{
+		{
+			ID: "1", UserID: 123, Start: now.Add(-24 * time.Hour).Format(time.RFC3339), ScoreState: "SCORED",
+			Score: &models.SleepScore{
+				StageSummary: models.SleepStageSummary{
+					TotalInBedTimeMilli:         8 * 3600 * 1000,
+					TotalAwakeTimeMilli:         30 * 60 * 1000,
+					TotalLightSleepTimeMilli:    4 * 3600 * 1000,
+					TotalSlowWaveSleepTimeMilli: 90 * 60 * 1000,
+					TotalRemSleepTimeMilli:      2 * 3600 * 1000,
+					DisturbanceCount:            11,
+				},
+				SleepNeeded: models.SleepNeeded{
+					BaselineMilli:             8 * 3600 * 1000,
+					NeedFromSleepDebtMilli:    30 * 60 * 1000,
+					NeedFromRecentStrainMilli: 30 * 60 * 1000,
+				},
+				SleepPerformancePct: 88,
+				SleepConsistencyPct: 76,
+				SleepEfficiencyPct:  94,
+			},
+		},
+		{
+			ID: "2", UserID: 123, Start: now.Add(-48 * time.Hour).Format(time.RFC3339), ScoreState: "SCORED",
+			Score: &models.SleepScore{
+				StageSummary: models.SleepStageSummary{
+					TotalInBedTimeMilli:      7 * 3600 * 1000,
+					TotalAwakeTimeMilli:      45 * 60 * 1000,
+					TotalLightSleepTimeMilli: 4 * 3600 * 1000,
+					TotalRemSleepTimeMilli:   90 * 60 * 1000,
+					DisturbanceCount:         14,
+				},
+				SleepNeeded: models.SleepNeeded{
+					BaselineMilli: 8 * 3600 * 1000,
+				},
+				SleepPerformancePct: 80,
+				SleepConsistencyPct: 70,
+				SleepEfficiencyPct:  89,
+			},
+		},
+	})
+
+	m := NewSleep(db)
+	pm := &m
+	pm.Update(pm.Refresh()())
+
+	view := pm.View()
+	for _, want := range []string{
+		"Avg:",
+		"Need gap:",
+		"Performance:",
+		"Sleep Need Gap",
+		"Sleep Performance",
+		"Sleep Consistency",
+		"Recent Nights",
+		"Actual",
+		"Dist",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("sleep view missing %q in:\n%s", want, view)
+		}
+	}
+}
+
 func TestWorkoutsModel_Detail(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()

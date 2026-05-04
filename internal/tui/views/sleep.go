@@ -122,20 +122,59 @@ func (m *SleepModel) View() string {
 
 	durations := make([]float64, 0, len(m.trend))
 	efficiencies := make([]float64, 0, len(m.trend))
+	performances := make([]float64, 0, len(m.trend))
+	consistencies := make([]float64, 0, len(m.trend))
 	for _, t := range m.trend {
 		durations = append(durations, float64(t.DurationMilli)/3600000.0)
 		efficiencies = append(efficiencies, t.EfficiencyPct)
+		performances = append(performances, t.PerformancePct)
+		consistencies = append(consistencies, t.ConsistencyPct)
 	}
+
+	summary := sleepSummary(m.trend, m.sleeps)
+	sections = append(sections, fmt.Sprintf(
+		"\nAvg: %.1fh  Need gap: %+.1fh  Performance: %.0f%%  Efficiency: %.0f%%  Consistency: %.0f%%  Dist/night: %.0f",
+		summary.avgActualHours,
+		summary.avgGapHours,
+		summary.avgPerformancePct,
+		summary.avgEfficiencyPct,
+		summary.avgConsistencyPct,
+		summary.avgDisturbances,
+	))
 
 	durSpark := components.Sparkline(durations, sparkW)
 	sections = append(sections, fmt.Sprintf("\n%s\n%s",
 		tui.TextStyle.Render("Sleep Duration (hours)"),
 		tui.AccentStyle.Render(durSpark)))
 
+	needGaps := sleepNeedGaps(m.sleeps)
+	if len(needGaps) > 0 {
+		gapSpark := components.Sparkline(needGaps, sparkW)
+		sections = append(sections, fmt.Sprintf("\n%s\n%s",
+			tui.TextStyle.Render("Sleep Need Gap (actual - need)"),
+			tui.AccentStyle.Render(gapSpark)))
+	}
+
+	perfSpark := components.Sparkline(performances, sparkW)
+	sections = append(sections, fmt.Sprintf("\n%s\n%s",
+		tui.TextStyle.Render("Sleep Performance (%%)"),
+		tui.GreenStyle.Render(perfSpark)))
+
 	effSpark := components.Sparkline(efficiencies, sparkW)
 	sections = append(sections, fmt.Sprintf("\n%s\n%s",
 		tui.TextStyle.Render("Sleep Efficiency (%%)"),
 		tui.GreenStyle.Render(effSpark)))
+
+	consSpark := components.Sparkline(consistencies, sparkW)
+	sections = append(sections, fmt.Sprintf("\n%s\n%s",
+		tui.TextStyle.Render("Sleep Consistency (%%)"),
+		tui.AccentStyle.Render(consSpark)))
+
+	table := recentSleepTable(m.sleeps, 7)
+	if table != "" {
+		sections = append(sections, "\n"+tui.TitleStyle.Render("Recent Nights"))
+		sections = append(sections, table)
+	}
 
 	sections = append(sections, "\n"+tui.TitleStyle.Render("Sleep Stages"))
 
@@ -195,6 +234,114 @@ func (m *SleepModel) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+type sleepSummaryStats struct {
+	avgActualHours    float64
+	avgGapHours       float64
+	avgPerformancePct float64
+	avgEfficiencyPct  float64
+	avgConsistencyPct float64
+	avgDisturbances   float64
+}
+
+func sleepSummary(trend []store.SleepTrendPoint, sleeps []models.Sleep) sleepSummaryStats {
+	var stats sleepSummaryStats
+	if len(trend) > 0 {
+		var totalActual, totalPerf, totalEff, totalCons float64
+		for _, t := range trend {
+			totalActual += float64(t.DurationMilli) / 3600000.0
+			totalPerf += t.PerformancePct
+			totalEff += t.EfficiencyPct
+			totalCons += t.ConsistencyPct
+		}
+		n := float64(len(trend))
+		stats.avgActualHours = totalActual / n
+		stats.avgPerformancePct = totalPerf / n
+		stats.avgEfficiencyPct = totalEff / n
+		stats.avgConsistencyPct = totalCons / n
+	}
+
+	var totalGap, totalDisturbances float64
+	var count int
+	for _, s := range sleeps {
+		if s.Score == nil {
+			continue
+		}
+		totalGap += sleepGapHours(s)
+		totalDisturbances += float64(s.Score.StageSummary.DisturbanceCount)
+		count++
+	}
+	if count > 0 {
+		stats.avgGapHours = totalGap / float64(count)
+		stats.avgDisturbances = totalDisturbances / float64(count)
+	}
+	return stats
+}
+
+func sleepNeedGaps(sleeps []models.Sleep) []float64 {
+	gaps := make([]float64, 0, len(sleeps))
+	for i := len(sleeps) - 1; i >= 0; i-- {
+		if sleeps[i].Score == nil {
+			continue
+		}
+		gaps = append(gaps, sleepGapHours(sleeps[i]))
+	}
+	return gaps
+}
+
+func recentSleepTable(sleeps []models.Sleep, limit int) string {
+	if limit > len(sleeps) {
+		limit = len(sleeps)
+	}
+	rows := make([]string, 0, limit+1)
+	rows = append(rows, "  Date    Actual  Need   Gap    Perf  Eff  Cons  Dist")
+	for i := 0; i < limit; i++ {
+		s := sleeps[i]
+		if s.Score == nil {
+			continue
+		}
+		t, _ := time.Parse(time.RFC3339, s.Start)
+		actual := actualSleepHours(s)
+		need := sleepNeedHours(s)
+		gap := actual - need
+		score := s.Score
+		rows = append(rows, fmt.Sprintf(
+			"  %-6s  %5.1fh  %4.1fh  %+5.1fh  %4.0f  %3.0f  %4.0f  %4d",
+			t.Format("Jan 02"),
+			actual,
+			need,
+			gap,
+			score.SleepPerformancePct,
+			score.SleepEfficiencyPct,
+			score.SleepConsistencyPct,
+			score.StageSummary.DisturbanceCount,
+		))
+	}
+	if len(rows) == 1 {
+		return ""
+	}
+	return strings.Join(rows, "\n")
+}
+
+func actualSleepHours(s models.Sleep) float64 {
+	if s.Score == nil {
+		return 0
+	}
+	ss := s.Score.StageSummary
+	return float64(ss.TotalInBedTimeMilli-ss.TotalAwakeTimeMilli) / 3600000.0
+}
+
+func sleepNeedHours(s models.Sleep) float64 {
+	if s.Score == nil {
+		return 0
+	}
+	need := s.Score.SleepNeeded
+	return float64(need.BaselineMilli+need.NeedFromSleepDebtMilli+need.NeedFromRecentStrainMilli+need.NeedFromRecentNapMilli) / 3600000.0
+}
+
+func sleepGapHours(s models.Sleep) float64 {
+	return actualSleepHours(s) - sleepNeedHours(s)
 }
 
 func (m *SleepModel) sparkWidth() int {
