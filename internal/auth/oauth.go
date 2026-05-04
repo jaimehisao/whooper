@@ -16,6 +16,7 @@ func OAuthConfig(cfg *config.Config) *oauth2.Config {
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  cfg.RedirectURL,
 		Scopes: []string{
+			"offline",
 			"read:recovery",
 			"read:cycles",
 			"read:sleep",

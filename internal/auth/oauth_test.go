@@ -26,6 +26,7 @@ func TestOAuthConfig(t *testing.T) {
 	}
 
 	expectedScopes := []string{
+		"offline",
 		"read:recovery",
 		"read:cycles",
 		"read:sleep",
