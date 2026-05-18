@@ -50,6 +50,18 @@ whooper
 | `whooper serve --addr 127.0.0.1:9464` | Serve local health, status, and Prometheus metrics endpoints |
 | `whooper version` | Print CLI version information |
 
+## Testing
+
+Use these contributor verification commands locally:
+
+```bash
+make lint
+make test-short
+make test
+```
+
+CI smoke execution details are in `.github/workflows/ci.yml` (`smoke` job).
+
 ## Troubleshooting
 
 Start with local readiness checks:
