@@ -19,9 +19,9 @@ This backlog tracks the next production-hardening and test-improvement work.
 
 ## 3) End-to-end smoke tests in CI
 
-- [ ] Add CI smoke test job that builds the binary and runs core CLI commands in a temp home dir.
-- [ ] Add smoke checks for `whooper config`, `whooper export`, and non-interactive command paths.
-- [ ] Ensure smoke tests run on pull requests and block merges on failure.
+- [x] Add CI smoke test job that builds the binary and runs core CLI commands in a temp home dir.
+- [x] Add smoke checks for `whooper config`, `whooper export`, and non-interactive command paths.
+- [ ] Ensure smoke tests are configured as required checks for protected branches.
 
 ## 4) Data-quality and property tests
 

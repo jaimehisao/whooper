@@ -130,6 +130,132 @@ func TestSyncRunE_UsesInjectedSyncerAndSince(t *testing.T) {
 	}
 }
 
+func TestSyncRunE_ReturnsWrappedSyncError(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	syncErr := errors.New("sync failed")
+	fake := &fakeSyncFromRunner{err: syncErr}
+	origLoadConfig := syncLoadConfig
+	origLoadToken := syncLoadToken
+	origOpenDB := syncOpenDB
+	origNewClient := syncNewClient
+	origNewSyncer := syncNewSyncer
+	origFull := syncFull
+	origSince := syncSince
+	origDebug := syncDebug
+	defer func() {
+		syncLoadConfig = origLoadConfig
+		syncLoadToken = origLoadToken
+		syncOpenDB = origOpenDB
+		syncNewClient = origNewClient
+		syncNewSyncer = origNewSyncer
+		syncFull = origFull
+		syncSince = origSince
+		syncDebug = origDebug
+	}()
+
+	syncLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	syncLoadToken = func(string) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "token"}, nil
+	}
+	syncOpenDB = func(string) (*store.DB, error) {
+		return db, nil
+	}
+	syncNewClient = func(oauth2.TokenSource) *api.Client {
+		return &api.Client{}
+	}
+	syncNewSyncer = func(*api.Client, *store.DB, gosync.ProgressFunc) syncRunner {
+		return fake
+	}
+	syncFull = false
+	syncSince = ""
+	syncDebug = true
+
+	var out bytes.Buffer
+	syncCmd.SetOut(&out)
+	defer syncCmd.SetOut(nil)
+
+	err = syncCmd.RunE(syncCmd, nil)
+	if !errors.Is(err, syncErr) {
+		t.Fatalf("syncCmd.RunE error = %v, want wrapped sync error", err)
+	}
+	if !strings.Contains(err.Error(), "sync:") {
+		t.Fatalf("expected wrapped sync error prefix, got: %v", err)
+	}
+	if fake.start != "" {
+		t.Fatalf("SyncFrom start = %q, want default empty start", fake.start)
+	}
+	if !strings.Contains(out.String(), "[debug] sync failed error=") {
+		t.Fatalf("expected debug failure output, got:\n%s", out.String())
+	}
+}
+
+func TestSyncRunE_FullFlagUsesFullStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	fake := &fakeSyncFromRunner{}
+	origLoadConfig := syncLoadConfig
+	origLoadToken := syncLoadToken
+	origOpenDB := syncOpenDB
+	origNewClient := syncNewClient
+	origNewSyncer := syncNewSyncer
+	origFull := syncFull
+	origSince := syncSince
+	origDebug := syncDebug
+	defer func() {
+		syncLoadConfig = origLoadConfig
+		syncLoadToken = origLoadToken
+		syncOpenDB = origOpenDB
+		syncNewClient = origNewClient
+		syncNewSyncer = origNewSyncer
+		syncFull = origFull
+		syncSince = origSince
+		syncDebug = origDebug
+	}()
+
+	syncLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	syncLoadToken = func(string) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "token"}, nil
+	}
+	syncOpenDB = func(string) (*store.DB, error) {
+		return db, nil
+	}
+	syncNewClient = func(oauth2.TokenSource) *api.Client {
+		return &api.Client{}
+	}
+	syncNewSyncer = func(*api.Client, *store.DB, gosync.ProgressFunc) syncRunner {
+		return fake
+	}
+	syncFull = true
+	syncSince = "2024-01-15"
+	syncDebug = false
+
+	if err := syncCmd.RunE(syncCmd, nil); err != nil {
+		t.Fatalf("syncCmd.RunE error = %v", err)
+	}
+	if fake.start != "full" {
+		t.Fatalf("SyncFrom start = %q, want full", fake.start)
+	}
+}
+
 func TestTuiRunE_UsesInjectedRunnerAndSyncFunction(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "whooper.db")
