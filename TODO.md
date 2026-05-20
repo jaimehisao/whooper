@@ -6,7 +6,7 @@ test improvements for Whooper.
 ## 1) Correctness fixes
 
 - [ ] Fix alert false positives when today's recovery or strain data is missing; do not treat missing data as zero.
-- [ ] Validate `whooper sync --since` as `YYYY-MM-DD` and fail early for invalid dates.
+- [x] Validate `whooper sync --since` as `YYYY-MM-DD` and fail early for invalid dates.
 - [ ] Return structured JSON errors from `/api/*` endpoints instead of plain text responses.
 - [ ] Review existing TODO entries against the current code and remove stale items as features land.
 

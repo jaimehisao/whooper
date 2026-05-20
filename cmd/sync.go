@@ -49,6 +49,10 @@ var syncCmd = &cobra.Command{
 }
 
 func runSyncCommand(cmd *cobra.Command) error {
+	if err := validateSyncSince(syncSince); err != nil {
+		return err
+	}
+
 	if !syncLoop {
 		return runSyncOnce(cmd)
 	}
@@ -68,6 +72,16 @@ func runSyncCommand(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Next sync in %s...\n", syncInterval)
 		syncSleep(syncInterval)
 	}
+}
+
+func validateSyncSince(value string) error {
+	if value == "" {
+		return nil
+	}
+	if _, err := time.Parse("2006-01-02", value); err != nil {
+		return fmt.Errorf("invalid --since value %q: must be YYYY-MM-DD", value)
+	}
+	return nil
 }
 
 func runSyncOnce(cmd *cobra.Command) error {
