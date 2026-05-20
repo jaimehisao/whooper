@@ -548,6 +548,17 @@ WHOOPER_HOME=/var/lib/whooper whooper sync
 - Secret/token files should never be committed; `.gitignore` and CI secret scanning are configured to help prevent leaks.
 - Report suspected vulnerabilities using `SECURITY.md`.
 
+## Development
+
+### CI
+
+End-to-end smoke tests run on every push and pull request to `main`. The workflow verifies:
+- Building the binary and running unit tests
+- CLI command execution (`version`, `config`, `doctor`, `status`, `export`)
+- API server construction and endpoint availability (`serve`)
+
+Tests use a temporary `WHOOPER_HOME` and do not require external API access or browser interaction.
+
 ## Dependencies
 
 | Package | Purpose |

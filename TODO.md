@@ -38,10 +38,10 @@ test improvements for Whooper.
 
 ## 5) End-to-end smoke tests in CI
 
-- [ ] Add CI smoke test job that builds the binary and runs core CLI commands in a temp home dir.
-- [ ] Add smoke checks for `whooper config`, `whooper export`, and non-interactive command paths.
-- [ ] Add smoke checks for `whooper doctor --skip-api`, `whooper status --json`, and API/server construction where feasible.
-- [ ] Ensure smoke tests run on pull requests and block merges on failure.
+- [x] Add CI smoke test job that builds the binary and runs core CLI commands in a temp home dir.
+- [x] Add smoke checks for `whooper config`, `whooper export`, and non-interactive command paths.
+- [x] Add smoke checks for `whooper doctor --skip-api`, `whooper status --json`, and API/server construction where feasible.
+- [x] Ensure smoke tests run on pull requests and block merges on failure.
 
 ## 6) Data-quality and property tests
 
