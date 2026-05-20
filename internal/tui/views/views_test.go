@@ -480,39 +480,74 @@ func TestWorkoutsModel_Nav(t *testing.T) {
 	}
 }
 
-func TestDashboardModel_Nav(t *testing.T) {
+func TestDashboardModel_SyncStatus(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	m := NewDashboard(db)
 	pm := &m
-	pm.Update(pm.Refresh()()) // Initial load
 
-	pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")}) // Sync trigger
-
-	// Test with error
-	pm.err = "forced error"
+	// Never synced
+	pm.Update(pm.Refresh()())
 	view := pm.View()
-	if !strings.Contains(view, "Error: forced error") {
-		t.Errorf("Expected error message in view, got: %s", view)
+	if !strings.Contains(view, "Never synced") {
+		t.Errorf("Expected 'Never synced' message, got: %s", view)
 	}
 
-	// Test with data
+	// Recently synced
 	now := time.Now().UTC()
-	db.SaveRecoveries([]models.Recovery{
-		{CycleID: 1, UserID: 123, CreatedAt: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 80}},
-	})
-	db.SaveSleeps([]models.Sleep{
-		{ID: "1", UserID: 123, Start: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.SleepScore{StageSummary: models.SleepStageSummary{TotalInBedTimeMilli: 8 * 3600 * 1000}}},
-	})
-	db.SaveCycles([]models.Cycle{
-		{ID: 1, UserID: 123, Start: now.Format(time.RFC3339), ScoreState: "SCORED", Score: &models.CycleScore{Strain: 15}},
-	})
-
+	db.SetSyncState("cycles", now.Format(time.RFC3339))
 	pm.Update(pm.Refresh()())
 	view = pm.View()
-	if !strings.Contains(view, "Recovery: 80%") || !strings.Contains(view, "Strain: 15.0") {
-		t.Errorf("Expected full dashboard view, got: %s", view)
+	if !strings.Contains(view, "Last sync: 0s ago") {
+		t.Errorf("Expected 'Last sync: 0s ago', got: %s", view)
+	}
+
+	// Stale sync
+	stale := now.Add(-48 * time.Hour)
+	db.SetSyncState("cycles", stale.Format(time.RFC3339))
+	pm.Update(pm.Refresh()())
+	view = pm.View()
+	if !strings.Contains(view, "(stale)") {
+		t.Errorf("Expected stale indicator, got: %s", view)
+	}
+}
+
+func TestDashboardModel_EmptyState(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	m := NewDashboard(db)
+	pm := &m
+	pm.Update(pm.Refresh()())
+
+	view := pm.View()
+	if !strings.Contains(view, "No local data found") {
+		t.Errorf("Expected empty state message, got: %s", view)
+	}
+}
+
+func TestDashboardModel_TodayPanel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	now := time.Now().UTC()
+	startToday := now.Format(time.RFC3339)
+
+	db.SaveRecoveries([]models.Recovery{
+		{CycleID: 1, UserID: 123, CreatedAt: startToday, ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 80, HRVRmssd: 50, RestingHeartRate: 60}},
+	})
+
+	m := NewDashboard(db)
+	pm := &m
+	pm.Update(pm.Refresh()())
+
+	view := pm.View()
+	if !strings.Contains(view, "Current Status") {
+		t.Errorf("Expected 'Current Status' panel, got: %s", view)
+	}
+	if !strings.Contains(view, "HRV: 50 ms") {
+		t.Errorf("Expected HRV in today panel, got: %s", view)
 	}
 }
 

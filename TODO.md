@@ -27,14 +27,14 @@ test improvements for Whooper.
 
 ## 4) TUI behavior and polish
 
-- [ ] Add model tests for `internal/tui/app.go` (`Init`, `Update`, `View`).
-- [ ] Add tab switch and keybinding navigation tests.
-- [ ] Add sync state tests (`syncing`, success message, error message, clear message tick).
-- [ ] Add window resize propagation tests to child views.
-- [ ] Add range-change and workout detail toggle tests for `internal/tui/views/*`.
-- [ ] Add explicit empty states when no local data exists.
-- [ ] Show last-sync timestamp and stale-data state in the dashboard/status area.
-- [ ] Add a compact today/detail panel with current recovery, sleep, strain, and workout context.
+- [x] Add model tests for `internal/tui/app.go` (`Init`, `Update`, `View`).
+- [x] Add tab switch and keybinding navigation tests.
+- [x] Add sync state tests (`syncing`, success message, error message, clear message tick).
+- [x] Add window resize propagation tests to child views.
+- [x] Add range-change and workout detail toggle tests for `internal/tui/views/*`.
+- [x] Add explicit empty states when no local data exists.
+- [x] Show last-sync timestamp and stale-data state in the dashboard/status area.
+- [x] Add a compact today/detail panel with current recovery, sleep, strain, and workout context.
 
 ## 5) End-to-end smoke tests in CI
 

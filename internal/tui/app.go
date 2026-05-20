@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -164,26 +165,47 @@ func (a *App) View() string {
 		content = a.views[a.activeTab].View()
 	}
 
-	statusParts := []string{
+	// Status Bar
+	helpParts := []string{
 		MutedStyle.Render("q quit"),
 		MutedStyle.Render("s sync"),
 		MutedStyle.Render("1-5 tabs"),
 		MutedStyle.Render("< > range"),
 	}
-	if a.syncMsg != "" {
-		if a.syncing {
-			statusParts = append(statusParts, YellowStyle.Render(a.syncMsg))
-		} else if a.syncErr {
-			statusParts = append(statusParts, RedStyle.Render(a.syncMsg))
-		} else {
-			statusParts = append(statusParts, GreenStyle.Render(a.syncMsg))
-		}
+	if a.activeTab == 3 { // Workouts tab
+		helpParts = append(helpParts, MutedStyle.Render("j/k nav"), MutedStyle.Render("enter detail"))
 	}
-	statusBar := lipgloss.JoinHorizontal(lipgloss.Top, statusParts[0], "  ", statusParts[1], "  ", statusParts[2], "  ", statusParts[3])
-	if len(statusParts) > 4 {
-		statusBar += "  " + statusParts[4]
+	if a.activeTab == 4 { // Correlations tab
+		helpParts = append(helpParts, MutedStyle.Render("< > X"), MutedStyle.Render("[ ] Y"))
 	}
 
+	helpBar := lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(helpParts, "  "))
+
+	syncBar := ""
+	if a.syncMsg != "" {
+		if a.syncing {
+			syncBar = YellowStyle.Render("* " + a.syncMsg)
+		} else if a.syncErr {
+			syncBar = RedStyle.Render("X " + a.syncMsg)
+		} else {
+			syncBar = GreenStyle.Render("V " + a.syncMsg)
+		}
+	}
+
+	helpWidth := lipgloss.Width(helpBar)
+	syncWidth := lipgloss.Width(syncBar)
+	spaceCount := a.width - helpWidth - syncWidth
+	if spaceCount < 0 {
+		spaceCount = 0
+	}
+
+	statusBar := lipgloss.JoinHorizontal(lipgloss.Top,
+		helpBar,
+		strings.Repeat(" ", spaceCount),
+		syncBar,
+	)
+
+	// Ensure the status bar is at the bottom of the content area
 	return lipgloss.JoinVertical(lipgloss.Left,
 		tabBar,
 		"",

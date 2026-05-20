@@ -29,6 +29,8 @@ type DashboardModel struct {
 	sparklineData  []float64
 	recentWorkouts []models.Workout
 	alerts         []string
+	lastSync       time.Time
+	isStale        bool
 	loaded         bool
 	err            string
 }
@@ -50,6 +52,7 @@ type dashboardDataMsg struct {
 	sparkline  []float64
 	workouts   []models.Workout
 	alerts     []string
+	lastSync   time.Time
 	err        string
 }
 
@@ -66,6 +69,11 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 
 		msg := dashboardDataMsg{}
 		var errs []string
+
+		lastSyncStr, err := db.GetSyncState("cycles")
+		if err == nil && lastSyncStr != "" {
+			msg.lastSync, _ = time.Parse(time.RFC3339, lastSyncStr)
+		}
 
 		recoveries, err := db.GetRecoveryTrend(monthAgo, "")
 		if err != nil {
@@ -145,6 +153,8 @@ func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sparklineData = msg.sparkline
 		m.recentWorkouts = msg.workouts
 		m.alerts = msg.alerts
+		m.lastSync = msg.lastSync
+		m.isStale = !m.lastSync.IsZero() && time.Since(m.lastSync) > 24*time.Hour
 		m.err = msg.err
 		m.loaded = true
 	case tea.WindowSizeMsg:
@@ -159,36 +169,53 @@ func (m *DashboardModel) View() string {
 	}
 
 	sparkW := m.sparkWidth()
-	sections := make([]string, 0, 7+len(m.alerts))
+	sections := make([]string, 0, 10+len(m.alerts))
+
+	// Status line: Last Sync
+	statusLine := ""
+	if m.lastSync.IsZero() {
+		statusLine = tui.YellowStyle.Render("Never synced. Press 's' to sync.")
+	} else {
+		since := time.Since(m.lastSync).Round(time.Minute)
+		status := fmt.Sprintf("Last sync: %s ago", since)
+		if m.isStale {
+			statusLine = tui.YellowStyle.Render("! " + status + " (stale)")
+		} else {
+			statusLine = tui.MutedStyle.Render(status)
+		}
+	}
+	sections = append(sections, statusLine)
 
 	if m.err != "" {
 		sections = append(sections, tui.RedStyle.Render("Error: "+m.err))
 	}
 
 	for _, alert := range m.alerts {
-		sections = append(sections, tui.YellowStyle.Render("  ⚠ "+alert))
+		sections = append(sections, tui.YellowStyle.Render("  ! "+alert))
 	}
 
-	gauge := components.Gauge(m.recoveryScore, sparkW)
-	sections = append(sections, tui.BoxStyle.Render(gauge))
+	hasData := m.recoveryDate != "" || m.sleepDate != "" || m.strainDate != "" ||
+		m.recoveryScore > 0 || m.hrvValue > 0 || m.rhrValue > 0 ||
+		m.sleepHours > 0 || m.dayStrain > 0 || len(m.alerts) > 0 ||
+		len(m.recentWorkouts) > 0 || len(m.sparklineData) > 0
+
+	if !hasData {
+		sections = append(sections, "", tui.MutedStyle.Render("No local data found. Run 'whooper sync' to fetch your data."))
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	}
+
+	// Today / Detail Panel
+	todayPanel := m.renderTodayPanel(sparkW)
+	sections = append(sections, "", todayPanel)
 
 	dateLine := latestDateLine(m.recoveryDate, m.sleepDate, m.strainDate)
 	if dateLine != "" {
 		sections = append(sections, tui.MutedStyle.Render(dateLine))
 	}
 
-	metrics := fmt.Sprintf(
-		"%s  %s  %s  %s",
-		tui.RecoveryColor(m.recoveryScore).Render(fmt.Sprintf("HRV: %.0f ms", m.hrvValue)),
-		tui.AccentStyle.Render(fmt.Sprintf("RHR: %.0f bpm", m.rhrValue)),
-		tui.AccentStyle.Render(fmt.Sprintf("Sleep: %.1fh (%.0f%%)", m.sleepHours, m.sleepEffPct)),
-		tui.AccentStyle.Render(fmt.Sprintf("Strain: %.1f", m.dayStrain)),
-	)
-	sections = append(sections, metrics)
-
 	if len(m.sparklineData) > 0 {
 		spark := components.Sparkline(m.sparklineData, sparkW)
-		sparkSection := fmt.Sprintf("%s\n%s",
+		sparkSection := fmt.Sprintf("\n%s\n%s",
 			tui.TitleStyle.Render("7-Day Recovery"),
 			tui.GreenStyle.Render(spark))
 		sections = append(sections, sparkSection)
@@ -196,7 +223,7 @@ func (m *DashboardModel) View() string {
 
 	if len(m.recentWorkouts) > 0 {
 		woLines := make([]string, 0, len(m.recentWorkouts)+1)
-		woLines = append(woLines, tui.TitleStyle.Render("Recent Workouts"))
+		woLines = append(woLines, "\n"+tui.TitleStyle.Render("Recent Workouts"))
 		for _, w := range m.recentWorkouts {
 			sport := models.SportName[w.SportID]
 			if sport == "" {
@@ -214,6 +241,27 @@ func (m *DashboardModel) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m *DashboardModel) renderTodayPanel(width int) string {
+	gauge := components.Gauge(m.recoveryScore, width)
+
+	metrics := fmt.Sprintf(
+		"%s  %s  %s  %s",
+		tui.RecoveryColor(m.recoveryScore).Render(fmt.Sprintf("HRV: %.0f ms", m.hrvValue)),
+		tui.AccentStyle.Render(fmt.Sprintf("RHR: %.0f bpm", m.rhrValue)),
+		tui.AccentStyle.Render(fmt.Sprintf("Sleep: %.1fh (%.0f%%)", m.sleepHours, m.sleepEffPct)),
+		tui.AccentStyle.Render(fmt.Sprintf("Strain: %.1f", m.dayStrain)),
+	)
+
+	return tui.BoxStyle.Width(width + 4).Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			tui.TitleStyle.Render("Current Status"),
+			gauge,
+			"",
+			metrics,
+		),
+	)
 }
 
 func latestDateLine(recoveryDate, sleepDate, strainDate string) string {
