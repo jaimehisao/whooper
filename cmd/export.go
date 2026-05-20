@@ -32,7 +32,7 @@ var exportCmd = &cobra.Command{
 
 		db, err := store.Open(config.DBPath())
 		if err != nil {
-			return fmt.Errorf("open database: %w", err)
+			return fmt.Errorf("open database: %w\nHint: run 'whooper sync' or 'whooper login' first to initialize the database", err)
 		}
 		defer db.Close()
 
@@ -51,6 +51,23 @@ var exportCmd = &cobra.Command{
 		}
 		if err != nil {
 			return fmt.Errorf("query %s: %w", exportEntity, err)
+		}
+
+		// Check if data is empty (it will be a slice)
+		isEmpty := false
+		switch v := data.(type) {
+		case []models.Cycle:
+			isEmpty = len(v) == 0
+		case []models.Recovery:
+			isEmpty = len(v) == 0
+		case []models.Sleep:
+			isEmpty = len(v) == 0
+		case []models.Workout:
+			isEmpty = len(v) == 0
+		}
+
+		if isEmpty {
+			fmt.Fprintf(cmd.ErrOrStderr(), "No %s found in the local database.\nHint: Run 'whooper sync' to fetch data from Whoop.\n", exportEntity)
 		}
 
 		w := cmd.OutOrStdout()

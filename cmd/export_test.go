@@ -19,6 +19,7 @@ func resetExportFlags() {
 	exportFrom = ""
 	exportTo = ""
 	exportCmd.SetOut(nil)
+	exportCmd.SetErr(nil)
 }
 
 func TestExportCommandDateFiltering(t *testing.T) {
@@ -172,6 +173,28 @@ func TestExportCommandDateFiltering(t *testing.T) {
 		err := exportCmd.RunE(exportCmd, nil)
 		if err == nil || !strings.Contains(err.Error(), "cannot be before") {
 			t.Fatalf("expected 'cannot be before' error, got %v", err)
+		}
+	})
+
+	t.Run("Empty results hint", func(t *testing.T) {
+		resetGlobals()
+		exportEntity = "recoveries"
+		exportFrom = "2025-01-01"
+		exportTo = "2025-01-01"
+
+		var stdout, stderr bytes.Buffer
+		exportCmd.SetOut(&stdout)
+		exportCmd.SetErr(&stderr)
+
+		if err := exportCmd.RunE(exportCmd, nil); err != nil {
+			t.Fatalf("exportCmd.RunE error = %v", err)
+		}
+
+		if !strings.Contains(stdout.String(), "[]") {
+			t.Errorf("expected empty JSON array on stdout, got %q", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "No recoveries found") {
+			t.Errorf("expected hint on stderr, got %q", stderr.String())
 		}
 	})
 }

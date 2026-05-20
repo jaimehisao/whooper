@@ -96,6 +96,9 @@ func runSyncOnce(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		return fmt.Errorf("client_id and client_secret are not configured.\nRun: whooper config set client-id <id>\n     whooper config set client-secret <secret>")
+	}
 	debugf("config loaded client_id_configured=%t client_secret_configured=%t", cfg.ClientID != "", cfg.ClientSecret != "")
 
 	token, err := syncLoadToken(syncTokenPath())
@@ -113,7 +116,7 @@ func runSyncOnce(cmd *cobra.Command) error {
 	client := syncNewClient(tokenSource)
 	db, err := syncOpenDB(syncDBPath())
 	if err != nil {
-		return fmt.Errorf("open database: %w", err)
+		return fmt.Errorf("open database: %w\nHint: run 'whooper login' or 'whooper sync' to initialize the database.", err)
 	}
 	defer db.Close()
 	debugf("database opened db_path=%s", syncDBPath())

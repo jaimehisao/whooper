@@ -82,7 +82,7 @@ func (db *DB) ListSleeps(from, to string, excludeNaps bool) ([]models.Sleep, err
 	}
 	defer rows.Close()
 
-	var sleeps []models.Sleep
+	sleeps := []models.Sleep{}
 	if from != "" && to == "" {
 		sleeps = make([]models.Sleep, 0, 90)
 	}

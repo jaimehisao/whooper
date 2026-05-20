@@ -60,7 +60,7 @@ func (db *DB) ListCycles(from, to string) ([]models.Cycle, error) {
 	}
 	defer rows.Close()
 
-	var cycles []models.Cycle
+	cycles := []models.Cycle{}
 	if from != "" && to == "" {
 		cycles = make([]models.Cycle, 0, 90)
 	}

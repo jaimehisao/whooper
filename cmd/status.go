@@ -283,6 +283,27 @@ func writeStatusText(out io.Writer, report statusReport) {
 	for _, err := range report.Errors {
 		fmt.Fprintf(out, "Error: %s\n", err)
 	}
+
+	if !report.ClientIDConfigured || !report.ClientSecretConfigured {
+		fmt.Fprintln(out, "\nHint: Configure Whoop API credentials:")
+		fmt.Fprintln(out, "  whooper config set client-id <id>")
+		fmt.Fprintln(out, "  whooper config set client-secret <secret>")
+	} else if !report.TokenPresent {
+		fmt.Fprintln(out, "\nHint: Authenticate with Whoop:")
+		fmt.Fprintln(out, "  whooper login")
+	} else if !report.DBOpen {
+		fmt.Fprintln(out, "\nHint: Initialize the database:")
+		fmt.Fprintln(out, "  whooper sync")
+	} else {
+		totalRecords := 0
+		for _, count := range report.RecordCounts {
+			totalRecords += count
+		}
+		if totalRecords == 0 {
+			fmt.Fprintln(out, "\nHint: Local database is empty. Sync data from Whoop:")
+			fmt.Fprintln(out, "  whooper sync")
+		}
+	}
 }
 
 func init() {

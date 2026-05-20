@@ -47,7 +47,7 @@ var tuiCmd = &cobra.Command{
 
 		db, err := tuiOpenDB(tuiDBPath())
 		if err != nil {
-			return fmt.Errorf("open database: %w", err)
+			return fmt.Errorf("open database: %w\nHint: run 'whooper sync' or 'whooper login' first to initialize the database", err)
 		}
 		defer db.Close()
 

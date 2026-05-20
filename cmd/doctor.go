@@ -106,7 +106,7 @@ func buildDoctorReport(deps doctorDeps, skipAPI bool) doctorReport {
 
 	cfg, err := deps.loadConfig()
 	if err != nil {
-		add(false, "load config", err)
+		add(false, "load config", fmt.Errorf("%w\nHint: make sure config file exists and is valid", err))
 		report.OK = false
 		report.Failures = failures
 		return report
@@ -117,7 +117,7 @@ func buildDoctorReport(deps doctorDeps, skipAPI bool) doctorReport {
 		skip("client-id configured")
 	} else {
 		if cfg.ClientID == "" {
-			add(false, "client-id configured", fmt.Errorf("client_id is empty"))
+			add(false, "client-id configured", fmt.Errorf("client_id is empty\nHint: run 'whooper config set client-id <id>'"))
 		} else {
 			add(true, "client-id configured", nil)
 		}
@@ -127,14 +127,14 @@ func buildDoctorReport(deps doctorDeps, skipAPI bool) doctorReport {
 		skip("client-secret configured")
 	} else {
 		if cfg.ClientSecret == "" {
-			add(false, "client-secret configured", fmt.Errorf("client_secret is empty"))
+			add(false, "client-secret configured", fmt.Errorf("client_secret is empty\nHint: run 'whooper config set client-secret <secret>'"))
 		} else {
 			add(true, "client-secret configured", nil)
 		}
 	}
 
 	if err := deps.validateRedirect(cfg.RedirectURL); err != nil {
-		add(false, "redirect URL", err)
+		add(false, "redirect URL", fmt.Errorf("%w\nHint: run 'whooper config set redirect-url <url>'", err))
 	} else {
 		add(true, "redirect URL", nil)
 	}
@@ -143,17 +143,17 @@ func buildDoctorReport(deps doctorDeps, skipAPI bool) doctorReport {
 	if skipAPI {
 		skip("load token")
 	} else if err != nil {
-		add(false, "load token", err)
+		add(false, "load token", fmt.Errorf("%w\nHint: run 'whooper login' to authenticate", err))
 	} else {
 		add(true, "load token", nil)
 	}
 
 	db, err := deps.openDB(deps.dbPath())
 	if err != nil {
-		add(false, "open database", err)
+		add(false, "open database", fmt.Errorf("%w\nHint: run 'whooper sync' or 'whooper login' to initialize the database", err))
 	} else {
 		if pingErr := db.Ping(); pingErr != nil {
-			add(false, "database ping", pingErr)
+			add(false, "database ping", fmt.Errorf("%w\nHint: the database file may be corrupt or inaccessible", pingErr))
 		} else {
 			add(true, "database ping", nil)
 		}
@@ -163,10 +163,10 @@ func buildDoctorReport(deps doctorDeps, skipAPI bool) doctorReport {
 	if skipAPI {
 		skip("Whoop API reachability")
 	} else if token == nil {
-		add(false, "Whoop API reachability", fmt.Errorf("token unavailable"))
+		add(false, "Whoop API reachability", fmt.Errorf("token unavailable\nHint: run 'whooper login'"))
 	} else {
 		if err := deps.apiCheck(cfg, token); err != nil {
-			add(false, "Whoop API reachability", err)
+			add(false, "Whoop API reachability", fmt.Errorf("%w\nHint: check your internet connection and API credentials", err))
 		} else {
 			add(true, "Whoop API reachability", nil)
 		}

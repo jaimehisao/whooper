@@ -82,7 +82,7 @@ func (db *DB) ListWorkouts(from, to string) ([]models.Workout, error) {
 	}
 	defer rows.Close()
 
-	var workouts []models.Workout
+	workouts := []models.Workout{}
 	if from != "" && to == "" {
 		workouts = make([]models.Workout, 0, 90)
 	}
