@@ -172,17 +172,18 @@ func addLatestRecoveryMetrics(db *store.DB, report *healthReport) error {
 
 func addLatestSleepMetrics(db *store.DB, report *healthReport) error {
 	var date string
-	var actualHours, needHours, efficiency, performance, consistency float64
+	var actualHours, needHours, debtHours, efficiency, performance, consistency float64
 	err := db.QueryRow(`SELECT date(start),
 			(total_in_bed_time_milli - total_awake_time_milli) / 3600000.0,
 			(baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli) / 3600000.0,
+			need_from_sleep_debt_milli / 3600000.0,
 			sleep_efficiency_pct,
 			sleep_performance_pct,
 			sleep_consistency_pct
 		FROM sleep
 		WHERE nap = 0 AND score_state = 'SCORED'
 		ORDER BY start DESC
-		LIMIT 1`).Scan(&date, &actualHours, &needHours, &efficiency, &performance, &consistency)
+		LIMIT 1`).Scan(&date, &actualHours, &needHours, &debtHours, &efficiency, &performance, &consistency)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -192,6 +193,7 @@ func addLatestSleepMetrics(db *store.DB, report *healthReport) error {
 	report.Values["sleep_actual_hours"] = actualHours
 	report.Values["sleep_need_hours"] = needHours
 	report.Values["sleep_need_gap_hours"] = actualHours - needHours
+	report.Values["sleep_debt_hours"] = debtHours
 	report.Values["sleep_efficiency_pct"] = efficiency
 	report.Values["sleep_performance_pct"] = performance
 	report.Values["sleep_consistency_pct"] = consistency
@@ -220,13 +222,14 @@ func addLatestStrainMetrics(db *store.DB, report *healthReport) error {
 
 func addLatestWorkoutMetrics(db *store.DB, report *healthReport) error {
 	var date string
-	var strain, distanceKm float64
-	var avgHR, maxHR int
-	err := db.QueryRow(`SELECT date(start), strain, average_heart_rate, max_heart_rate, distance_meter / 1000.0
+	var strain, distanceKm, durationMinutes float64
+	var avgHR, maxHR, sportID int
+	err := db.QueryRow(`SELECT date(start), strain, average_heart_rate, max_heart_rate, distance_meter / 1000.0,
+		(strftime('%s', end) - strftime('%s', start)) / 60.0, sport_id
 		FROM workout
 		WHERE score_state = 'SCORED'
 		ORDER BY start DESC
-		LIMIT 1`).Scan(&date, &strain, &avgHR, &maxHR, &distanceKm)
+		LIMIT 1`).Scan(&date, &strain, &avgHR, &maxHR, &distanceKm, &durationMinutes, &sportID)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -237,6 +240,8 @@ func addLatestWorkoutMetrics(db *store.DB, report *healthReport) error {
 	report.Values["workout_average_heart_rate"] = float64(avgHR)
 	report.Values["workout_max_heart_rate"] = float64(maxHR)
 	report.Values["workout_distance_km"] = distanceKm
+	report.Values["workout_duration_minutes"] = durationMinutes
+	report.Values["workout_sport_id"] = float64(sportID)
 	report.Timestamps["workout"] = date
 	return nil
 }

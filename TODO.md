@@ -20,7 +20,7 @@ test improvements for Whooper.
 
 ## 3) CLI usability features
 
-- [ ] Add `whooper summary` or `whooper inspect` with latest recovery, HRV, sleep debt, strain, workouts, and last sync state.
+- [x] Add `whooper summary` or `whooper inspect` with latest recovery, HRV, sleep debt, strain, workouts, and last sync state.
 - [ ] Add alert configuration commands, such as enabling/disabling alerts and setting low-recovery/high-strain thresholds.
 - [ ] Improve command errors with next-step hints for missing config, missing token, empty database, and failed database open.
 - [ ] Add unit tests for success/failure paths in `sync`, `login`, `tui`, summary/inspect, and alert configuration commands.

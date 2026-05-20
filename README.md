@@ -45,6 +45,7 @@ whooper
 | `whooper sync --loop --interval 30m` | Keep syncing in the foreground on an interval |
 | `whooper config` | Show current configuration |
 | `whooper config set <key> <value>` | Set config (client-id, client-secret, redirect-url) |
+| `whooper summary` | Show latest health metrics and sync state (alias: inspect) |
 | `whooper doctor --json` | Run machine-readable readiness checks |
 | `whooper status --json` | Show local config, token, database, and sync state |
 | `whooper export -e <entity> -f <format> [--from YYYY-MM-DD] [--to YYYY-MM-DD]` | Export data (entities: cycles, recoveries, sleeps, workouts; formats: json, csv) |
