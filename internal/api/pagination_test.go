@@ -235,3 +235,99 @@ func TestFetchPaginated_RepeatedNextTokenStops(t *testing.T) {
 		t.Fatalf("callCount = %d, want 2", callCount)
 	}
 }
+
+func TestFetchPaginated_Property(t *testing.T) {
+	tests := []struct {
+		name       string
+		tokens     []string // tokens to return in sequence
+		wantCalls  int
+		wantItems  int
+		wantParams map[string]string
+	}{
+		{
+			name:      "Empty token stops",
+			tokens:    []string{""},
+			wantCalls: 1,
+			wantItems: 1,
+		},
+		{
+			name:      "Repeated token stops",
+			tokens:    []string{"a", "a"},
+			wantCalls: 2,
+			wantItems: 2,
+		},
+		{
+			name:      "Three page chain",
+			tokens:    []string{"p2", "p3", ""},
+			wantCalls: 3,
+			wantItems: 3,
+		},
+		{
+			name:      "Preserves params",
+			tokens:    []string{""},
+			wantCalls: 1,
+			wantItems: 1,
+			wantParams: map[string]string{"foo": "bar", "limit": "20"},
+		},
+		{
+			name:      "Unusual token strings",
+			tokens:    []string{"!@#$%^&*()", "   ", "{\"json\":true}", ""},
+			wantCalls: 4,
+			wantItems: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify query params are preserved
+				for k, v := range tt.wantParams {
+					if r.URL.Query().Get(k) != v {
+						t.Errorf("call %d: missing param %s=%s", callCount, k, v)
+					}
+				}
+
+				// Verify nextToken is NOT sent on first page
+				if callCount == 0 && r.URL.Query().Get("nextToken") != "" {
+					t.Errorf("call 0: should not have nextToken, got %q", r.URL.Query().Get("nextToken"))
+				}
+				// Verify nextToken IS sent on subsequent pages
+				if callCount > 0 && r.URL.Query().Get("nextToken") != tt.tokens[callCount-1] {
+					t.Errorf("call %d: want nextToken %q, got %q", callCount, tt.tokens[callCount-1], r.URL.Query().Get("nextToken"))
+				}
+
+				token := ""
+				if callCount < len(tt.tokens) {
+					token = tt.tokens[callCount]
+				}
+
+				resp := paginatedResponse[testItem]{
+					Records:   []testItem{{ID: callCount}},
+					NextToken: token,
+				}
+				callCount++
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(resp)
+			}))
+			defer server.Close()
+
+			client := newTestClient(server.URL)
+			var captured []testItem
+			err := FetchPaginated[testItem](client, "/items", tt.wantParams, func(records []testItem) error {
+				captured = append(captured, records...)
+				return nil
+			})
+
+			if err != nil {
+				t.Fatalf("FetchPaginated error = %v", err)
+			}
+			if callCount != tt.wantCalls {
+				t.Errorf("callCount = %d, want %d", callCount, tt.wantCalls)
+			}
+			if len(captured) != tt.wantItems {
+				t.Errorf("len(captured) = %d, want %d", len(captured), tt.wantItems)
+			}
+		})
+	}
+}

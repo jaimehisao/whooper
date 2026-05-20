@@ -1,6 +1,7 @@
 package formatters
 
 import (
+	"math"
 	"testing"
 
 	"git.infra.hisao.org/hisao/whooper/internal/store"
@@ -78,4 +79,43 @@ func TestCorrelationDescription(t *testing.T) {
 	if desc == "" {
 		t.Error("expected non-empty description")
 	}
+}
+
+func TestFormatCorrelation_EdgeCases(t *testing.T) {
+	t.Run("NaN and Infinity", func(t *testing.T) {
+		points := []store.CorrelationPoint{
+			{X: math.NaN(), Y: 50},
+			{X: 80, Y: math.Inf(1)},
+		}
+		result := FormatCorrelationData(points, "recovery", "hrv")
+		if !result.HasData {
+			t.Error("expected HasData=true")
+		}
+	})
+
+	t.Run("Single Point", func(t *testing.T) {
+		points := []store.CorrelationPoint{{X: 50, Y: 50}}
+		result := FormatCorrelationData(points, "recovery", "hrv")
+		if !result.HasData {
+			t.Error("expected HasData=true")
+		}
+	})
+
+	t.Run("Large Range", func(t *testing.T) {
+		points := []store.CorrelationPoint{
+			{X: 1, Y: 1},
+			{X: 1e10, Y: 1e10},
+		}
+		result := FormatCorrelationData(points, "recovery", "hrv")
+		if !result.HasData {
+			t.Error("expected HasData=true")
+		}
+	})
+
+	t.Run("Description NaN and Inf", func(t *testing.T) {
+		// Ensure it doesn't panic
+		_ = CorrelationDescription("recovery", "hrv", math.NaN())
+		_ = CorrelationDescription("recovery", "hrv", math.Inf(1))
+		_ = CorrelationDescription("recovery", "hrv", math.Inf(-1))
+	})
 }

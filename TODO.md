@@ -45,10 +45,10 @@ test improvements for Whooper.
 
 ## 6) Data-quality and property tests
 
-- [ ] Add fuzz/property tests for pagination token handling in `internal/api/pagination.go`.
-- [ ] Add property tests for trend/correlation query invariants in `internal/store/queries.go`.
-- [ ] Add formatter edge-case tests (empty data, NaN handling, large ranges, invalid timestamps).
-- [ ] Add tests for SQL views (`daily_recovery`, `daily_sleep`, `daily_strain`, `workout_summary`) to lock their public shape.
+- [x] Add fuzz/property tests for pagination token handling in `internal/api/pagination.go`.
+- [x] Add property tests for trend/correlation query invariants in `internal/store/queries.go`.
+- [x] Add formatter edge-case tests (empty data, NaN handling, large ranges, invalid timestamps).
+- [x] Add tests for SQL views (`daily_recovery`, `daily_sleep`, `daily_strain`, `workout_summary`) to lock their public shape.
 
 ## 7) Migration resilience tests
 

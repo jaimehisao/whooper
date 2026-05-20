@@ -1,6 +1,7 @@
 package formatters
 
 import (
+	"math"
 	"testing"
 
 	"git.infra.hisao.org/hisao/whooper/internal/store"
@@ -129,4 +130,43 @@ func TestExtractFieldSleepHours(t *testing.T) {
 	if result[0] != 8.0 {
 		t.Errorf("result[0] = %v, want 8.0", result[0])
 	}
+}
+
+func TestFormatSleep_EdgeCases(t *testing.T) {
+	t.Run("NaN and Infinity", func(t *testing.T) {
+		data := []store.SleepTrendPoint{
+			{EfficiencyPct: math.NaN(), DurationMilli: 0},
+			{EfficiencyPct: math.Inf(1), DurationMilli: 1000000000},
+		}
+		result := FormatSleepData(data, 7, 80)
+		if !result.HasData {
+			t.Error("expected HasData=true")
+		}
+
+		summary := FormatSleepSummary(data)
+		if summary == "" {
+			t.Error("expected non-empty summary for extreme values")
+		}
+	})
+
+	t.Run("Large Range", func(t *testing.T) {
+		data := []store.SleepTrendPoint{
+			{DurationMilli: 0},
+			{DurationMilli: 1e12}, // ~277,778 hours
+		}
+		result := FormatSleepData(data, 7, 80)
+		if result.Latest.Hours < 100000 {
+			t.Errorf("expected large hours (>100000), got %v", result.Latest.Hours)
+		}
+	})
+
+	t.Run("Invalid Timestamps", func(t *testing.T) {
+		data := []store.SleepTrendPoint{
+			{Date: "not-a-date", DurationMilli: 28800000},
+		}
+		result := FormatSleepData(data, 7, 80)
+		if result.Latest.Date != "not-a-date" {
+			t.Errorf("expected date preservation, got %q", result.Latest.Date)
+		}
+	})
 }

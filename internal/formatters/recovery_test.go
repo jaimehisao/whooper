@@ -1,6 +1,7 @@
 package formatters
 
 import (
+	"math"
 	"testing"
 
 	"git.infra.hisao.org/hisao/whooper/internal/store"
@@ -67,7 +68,7 @@ func TestFormatRecoverySparkline(t *testing.T) {
 	if result == "" {
 		t.Error("expected non-empty sparkline")
 	}
-	
+
 	// Small width
 	result = FormatRecoverySparkline(data, 5)
 	if len(result) == 0 {
@@ -150,6 +151,13 @@ func TestMinFloat(t *testing.T) {
 	if result != 1 {
 		t.Errorf("minFloat() = %v, want 1", result)
 	}
+
+	// NaN handling (current implementation min is data[0], then compares)
+	// If first is NaN, it might stay NaN or return something else.
+	// We just want to ensure no panic.
+	_ = minFloat([]float64{math.NaN(), 1, 2})
+	_ = minFloat([]float64{1, math.NaN(), 2})
+	_ = minFloat([]float64{math.Inf(1), math.Inf(-1)})
 }
 
 func TestMaxFloat(t *testing.T) {
@@ -158,6 +166,10 @@ func TestMaxFloat(t *testing.T) {
 	if result != 9 {
 		t.Errorf("maxFloat() = %v, want 9", result)
 	}
+
+	_ = maxFloat([]float64{math.NaN(), 1, 2})
+	_ = maxFloat([]float64{1, math.NaN(), 2})
+	_ = maxFloat([]float64{math.Inf(1), math.Inf(-1)})
 }
 
 func TestAverageFloat(t *testing.T) {
@@ -171,6 +183,45 @@ func TestAverageFloat(t *testing.T) {
 	if result != 0 {
 		t.Errorf("averageFloat(nil) = %v, want 0", result)
 	}
+
+	_ = averageFloat([]float64{math.NaN(), 10})
+	_ = averageFloat([]float64{math.Inf(1), -math.Inf(1)})
+}
+
+func TestFormatRecovery_EdgeCases(t *testing.T) {
+	t.Run("NaN and Infinity", func(t *testing.T) {
+		data := []store.RecoveryTrendPoint{
+			{RecoveryScore: math.NaN(), HRV: math.Inf(1), RHR: math.Inf(-1)},
+			{RecoveryScore: 100, HRV: 50, RHR: 60},
+		}
+		result := FormatRecoveryData(data, 7, 80)
+		if !result.HasData {
+			t.Error("expected HasData=true")
+		}
+
+		summary := FormatRecoverySummary(data)
+		if summary == "" {
+			t.Error("expected non-empty summary for extreme values")
+		}
+	})
+
+	t.Run("Large Range Sparkline", func(t *testing.T) {
+		data := []float64{1, 1e10, 1e-10, 50, math.Inf(1)}
+		spark := FormatRecoverySparkline(data, 20)
+		if spark == "" {
+			t.Error("expected sparkline for large range")
+		}
+	})
+
+	t.Run("Invalid Timestamps", func(t *testing.T) {
+		data := []store.RecoveryTrendPoint{
+			{Date: "not-a-date", RecoveryScore: 50},
+		}
+		result := FormatRecoveryData(data, 7, 80)
+		if result.Latest.Date != "not-a-date" {
+			t.Errorf("expected date preservation, got %q", result.Latest.Date)
+		}
+	})
 }
 
 func TestExtractField(t *testing.T) {

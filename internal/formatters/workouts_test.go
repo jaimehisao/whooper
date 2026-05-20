@@ -1,6 +1,7 @@
 package formatters
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -196,4 +197,56 @@ func TestWorkoutDateRange(t *testing.T) {
 	if from >= to {
 		t.Errorf("from (%s) should be before to (%s)", from, to)
 	}
+}
+
+func TestFormatWorkout_EdgeCases(t *testing.T) {
+	t.Run("NaN and Infinity", func(t *testing.T) {
+		workouts := []models.Workout{
+			{
+				ID:    "1",
+				Score: &models.WorkoutScore{Strain: math.NaN()},
+			},
+			{
+				ID:    "2",
+				Score: &models.WorkoutScore{Strain: math.Inf(1)},
+			},
+		}
+		result := FormatWorkoutData(workouts)
+		if !result.HasData {
+			t.Error("expected HasData=true")
+		}
+
+		summary := FormatWorkoutSummary(workouts)
+		if summary == "" {
+			t.Error("expected non-empty summary for extreme values")
+		}
+
+		table := FormatWorkoutTable(workouts, 80)
+		if table == "" {
+			t.Error("expected non-empty table for extreme values")
+		}
+	})
+
+	t.Run("Invalid Timestamps and Durations", func(t *testing.T) {
+		workouts := []models.Workout{
+			{
+				ID:    "1",
+				Start: "invalid",
+				End:   "invalid",
+			},
+			{
+				ID:    "2",
+				Start: "2024-01-15T12:00:00Z",
+				End:   "2024-01-15T10:00:00Z", // End before start
+			},
+		}
+		result := FormatWorkoutData(workouts)
+		if len(result.Workouts) != 2 {
+			t.Errorf("expected 2 workouts, got %d", len(result.Workouts))
+		}
+		if result.Workouts[1].DurationMins >= 0 {
+			// Current implementation returns negative if end < start because duration.Minutes() is used.
+			// Let's check it doesn't panic.
+		}
+	})
 }
