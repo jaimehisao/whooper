@@ -2,11 +2,89 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"git.infra.hisao.org/hisao/whooper/internal/models"
+	"git.infra.hisao.org/hisao/whooper/internal/store"
 )
+
+func TestExportCommandDateFiltering(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	if err := db.SaveRecoveries([]models.Recovery{
+		{CycleID: 1, UserID: 1, CreatedAt: "2024-01-01T07:00:00Z", ScoreState: "SCORED"},
+		{CycleID: 2, UserID: 1, CreatedAt: "2024-01-15T07:00:00Z", ScoreState: "SCORED"},
+		{CycleID: 3, UserID: 1, CreatedAt: "2024-02-01T07:00:00Z", ScoreState: "SCORED"},
+	}); err != nil {
+		t.Fatalf("SaveRecoveries: %v", err)
+	}
+	db.Close()
+
+	// Reset flags after test
+	defer func() {
+		exportFrom = ""
+		exportTo = ""
+		exportEntity = "recoveries"
+		exportFormat = "json"
+		exportOutput = ""
+	}()
+
+	t.Run("Valid range", func(t *testing.T) {
+		exportEntity = "recoveries"
+		exportFormat = "json"
+		exportFrom = "2024-01-10"
+		exportTo = "2024-01-20"
+		exportOutput = "" // stdout
+
+		var buf bytes.Buffer
+		exportCmd.SetOut(&buf)
+		defer exportCmd.SetOut(nil)
+
+		err := exportCmd.RunE(exportCmd, nil)
+		if err != nil {
+			t.Fatalf("exportCmd.RunE error = %v", err)
+		}
+
+		var out []models.Recovery
+		if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+			t.Fatalf("JSON decode error: %v\n%s", err, buf.String())
+		}
+
+		if len(out) != 1 {
+			t.Fatalf("got %d records, want 1", len(out))
+		}
+		if out[0].CycleID != 2 {
+			t.Fatalf("got cycle_id %d, want 2", out[0].CycleID)
+		}
+	})
+
+	t.Run("Invalid from date", func(t *testing.T) {
+		exportFrom = "invalid"
+		err := exportCmd.RunE(exportCmd, nil)
+		if err == nil || !strings.Contains(err.Error(), "invalid 'from' date") {
+			t.Fatalf("expected invalid 'from' date error, got %v", err)
+		}
+	})
+
+	t.Run("To before from", func(t *testing.T) {
+		exportFrom = "2024-01-20"
+		exportTo = "2024-01-10"
+		err := exportCmd.RunE(exportCmd, nil)
+		if err == nil || !strings.Contains(err.Error(), "cannot be before") {
+			t.Fatalf("expected 'cannot be before' error, got %v", err)
+		}
+	})
+}
 
 func TestWriteCSVRecoveries(t *testing.T) {
 	var buf bytes.Buffer

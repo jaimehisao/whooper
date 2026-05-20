@@ -272,6 +272,130 @@ func TestServeCommandUsesAddrFlag(t *testing.T) {
 	}
 }
 
+func TestServeAPIJSONErrorsAndFilters(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	// Add data for date filter tests
+	if err := db.SaveRecoveries([]models.Recovery{
+		{CycleID: 1, UserID: 1, CreatedAt: "2024-01-01T07:00:00Z", ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 10}},
+		{CycleID: 2, UserID: 1, CreatedAt: "2024-01-15T07:00:00Z", ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 20}},
+		{CycleID: 3, UserID: 1, CreatedAt: "2024-02-01T07:00:00Z", ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 30}},
+	}); err != nil {
+		t.Fatalf("SaveRecoveries: %v", err)
+	}
+	db.Close()
+
+	handler := newServeHandler(buildServeStatusReport)
+
+	t.Run("JSON Error on 405", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/recovery", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status = %d, want 405", rec.Code)
+		}
+		var got errorResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+		if got.Error != "method not allowed" {
+			t.Fatalf("error message = %q, want 'method not allowed'", got.Error)
+		}
+	})
+
+	t.Run("JSON Error on Invalid Date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/recovery?from=invalid", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", rec.Code)
+		}
+		var got errorResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+		if !strings.Contains(got.Error, "invalid 'from' date") {
+			t.Fatalf("error message = %q", got.Error)
+		}
+	})
+
+	t.Run("Date Filtering", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/recovery?from=2024-01-10&to=2024-01-20", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("got %d rows, want 1", len(rows))
+		}
+		if rows[0]["recovery_score"].(float64) != 20 {
+			t.Fatalf("got score %v, want 20", rows[0]["recovery_score"])
+		}
+	})
+
+	t.Run("Inclusive To Date", func(t *testing.T) {
+		// 2024-01-15T07:00:00Z should be included when to=2024-01-15
+		req := httptest.NewRequest(http.MethodGet, "/api/recovery?to=2024-01-15", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+		// Should include 2024-01-01 and 2024-01-15
+		if len(rows) != 2 {
+			t.Fatalf("got %d rows, want 2", len(rows))
+		}
+	})
+
+	t.Run("Limit Capping", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/recovery?limit=5000", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d", rec.Code)
+		}
+		// We have 3 records in DB, so even with capping we should get 3 if limit > 3
+		var rows []map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+		if len(rows) != 3 {
+			t.Fatalf("got %d rows, want 3", len(rows))
+		}
+	})
+
+	t.Run("Limit Fallback", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/recovery?limit=invalid", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d", rec.Code)
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+		if len(rows) != 3 {
+			t.Fatalf("got %d rows, want 3", len(rows))
+		}
+	})
+}
+
 func TestServeCommandReturnsListenError(t *testing.T) {
 	origListenAndServe := serveListenAndServe
 	defer func() {

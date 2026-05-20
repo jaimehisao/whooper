@@ -13,10 +13,22 @@ import (
 const defaultAPILimit = 90
 const maxAPILimit = 1000
 
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func writeErrorJSON(w http.ResponseWriter, message string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(errorResponse{Error: message})
+}
+
 func apiSummaryHandler(reporter statusReporter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			writeErrorJSON(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -24,23 +36,32 @@ func apiSummaryHandler(reporter statusReporter) http.HandlerFunc {
 	}
 }
 
-func apiRowsHandler(query string, args func(*http.Request) []any) http.HandlerFunc {
+func apiRowsHandler(view, dateCol, orderCol string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			writeErrorJSON(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
 		db, err := store.OpenReadOnly(config.DBPath())
 		if err != nil {
-			http.Error(w, fmt.Sprintf("open database: %v", err), http.StatusServiceUnavailable)
+			writeErrorJSON(w, fmt.Sprintf("open database: %v", err), http.StatusServiceUnavailable)
 			return
 		}
 		defer db.Close()
 
-		rows, err := queryJSONRows(db, query, args(r)...)
+		from := r.URL.Query().Get("from")
+		to := r.URL.Query().Get("to")
+		if err := validateDateRange(from, to); err != nil {
+			writeErrorJSON(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		limit := apiLimit(r)
+
+		query, args := apiRowsQuery(view, dateCol, orderCol, from, to, limit)
+		rows, err := queryJSONRows(db, query, args...)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("query database: %v", err), http.StatusInternalServerError)
+			writeErrorJSON(w, fmt.Sprintf("query database: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -49,6 +70,24 @@ func apiRowsHandler(query string, args func(*http.Request) []any) http.HandlerFu
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(rows)
 	}
+}
+
+func apiRowsQuery(view, dateCol, orderCol, from, to string, limit int) (string, []any) {
+	query := fmt.Sprintf("SELECT * FROM %s WHERE 1=1", view)
+	var args []any
+
+	if from != "" {
+		query += fmt.Sprintf(" AND %s >= ?", dateCol)
+		args = append(args, from)
+	}
+	if to != "" {
+		query += fmt.Sprintf(" AND %s <= ?", dateCol)
+		args = append(args, to)
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s DESC LIMIT ?", orderCol)
+	args = append(args, limit)
+	return query, args
 }
 
 func queryJSONRows(db *store.DB, query string, args ...any) ([]map[string]any, error) {
@@ -105,8 +144,4 @@ func apiLimit(r *http.Request) int {
 		return maxAPILimit
 	}
 	return limit
-}
-
-func limitArg(r *http.Request) []any {
-	return []any{apiLimit(r)}
 }

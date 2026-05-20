@@ -29,6 +29,23 @@ var serveListenAndServe = func(addr string, handler http.Handler) error {
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Run a localhost observability HTTP server",
+	Long: `Run a localhost observability HTTP server that provides health, status, metrics, and data APIs.
+
+Available API endpoints:
+  /healthz        - Health check
+  /status         - Current configuration and sync status
+  /metrics        - Prometheus metrics
+  /api/summary    - Latest health metrics summary
+  /api/recovery   - Daily recovery data
+  /api/sleep      - Daily sleep data
+  /api/strain     - Daily strain data
+  /api/workouts   - Workout summary data
+
+Query parameters for /api endpoints:
+  from            - Start date (YYYY-MM-DD)
+  to              - End date (YYYY-MM-DD), inclusive
+  limit           - Number of records to return (default: 90, max: 1000)
+`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		handler := newServeHandler(buildServeStatusReport)
 		fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", serveAddr)
@@ -51,10 +68,10 @@ func newServeHandler(reporter statusReporter) http.Handler {
 	mux.HandleFunc("/healthz", healthHandler)
 	mux.HandleFunc("/status", statusHandler(reporter))
 	mux.HandleFunc("/api/summary", apiSummaryHandler(reporter))
-	mux.HandleFunc("/api/recovery", apiRowsHandler(`SELECT * FROM daily_recovery ORDER BY day DESC LIMIT ?`, limitArg))
-	mux.HandleFunc("/api/sleep", apiRowsHandler(`SELECT * FROM daily_sleep ORDER BY day DESC LIMIT ?`, limitArg))
-	mux.HandleFunc("/api/strain", apiRowsHandler(`SELECT * FROM daily_strain ORDER BY day DESC LIMIT ?`, limitArg))
-	mux.HandleFunc("/api/workouts", apiRowsHandler(`SELECT * FROM workout_summary ORDER BY start DESC LIMIT ?`, limitArg))
+	mux.HandleFunc("/api/recovery", apiRowsHandler("daily_recovery", "day", "day"))
+	mux.HandleFunc("/api/sleep", apiRowsHandler("daily_sleep", "day", "day"))
+	mux.HandleFunc("/api/strain", apiRowsHandler("daily_strain", "day", "day"))
+	mux.HandleFunc("/api/workouts", apiRowsHandler("workout_summary", "day", "start"))
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(newStatusCollector(reporter))

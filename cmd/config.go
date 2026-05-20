@@ -19,11 +19,11 @@ var configCmd = &cobra.Command{
 		if len(masked) > 4 {
 			masked = "****" + masked[len(masked)-4:]
 		}
-		fmt.Printf("Config file: %s\n", config.Path())
-		fmt.Printf("  client_id:     %s\n", cfg.ClientID)
-		fmt.Printf("  client_secret: %s\n", masked)
-		fmt.Printf("  redirect_url:  %s\n", cfg.RedirectURL)
-		fmt.Printf("  database:      %s\n", config.DBPath())
+		fmt.Fprintf(cmd.OutOrStdout(), "Config file: %s\n", config.Path())
+		fmt.Fprintf(cmd.OutOrStdout(), "  client_id:     %s\n", cfg.ClientID)
+		fmt.Fprintf(cmd.OutOrStdout(), "  client_secret: %s\n", masked)
+		fmt.Fprintf(cmd.OutOrStdout(), "  redirect_url:  %s\n", cfg.RedirectURL)
+		fmt.Fprintf(cmd.OutOrStdout(), "  database:      %s\n", config.DBPath())
 		return nil
 	},
 }
@@ -51,7 +51,7 @@ var configSetCmd = &cobra.Command{
 		if err := config.Save(cfg); err != nil {
 			return err
 		}
-		fmt.Printf("Set %s successfully.\n", args[0])
+		fmt.Fprintf(cmd.OutOrStdout(), "Set %s successfully.\n", args[0])
 		return nil
 	},
 }

@@ -47,7 +47,7 @@ whooper
 | `whooper config set <key> <value>` | Set config (client-id, client-secret, redirect-url) |
 | `whooper doctor --json` | Run machine-readable readiness checks |
 | `whooper status --json` | Show local config, token, database, and sync state |
-| `whooper export -e <entity> -f <format>` | Export data (entities: cycles, recoveries, sleeps, workouts; formats: json, csv) |
+| `whooper export -e <entity> -f <format> [--from YYYY-MM-DD] [--to YYYY-MM-DD]` | Export data (entities: cycles, recoveries, sleeps, workouts; formats: json, csv) |
 
 ## Troubleshooting
 
@@ -153,8 +153,13 @@ whooper serve --addr 0.0.0.0:9464
 Then point Prometheus at `http://<host>:9464/metrics`.
 
 The `/api/*` endpoints return JSON from the local SQLite cache. `recovery`,
-`sleep`, `strain`, and `workouts` accept an optional `limit` query parameter,
-for example `/api/sleep?limit=30`.
+`sleep`, `strain`, and `workouts` accept optional query parameters:
+
+- `limit`: Number of records to return (default: 90, max: 1000). Invalid or missing values fallback to the default.
+- `from`: Start date in `YYYY-MM-DD` format.
+- `to`: End date in `YYYY-MM-DD` format.
+
+Example: `/api/sleep?limit=30&from=2024-01-01&to=2024-01-31`.
 
 For systemd deployment examples, see `docs/systemd.md`.
 

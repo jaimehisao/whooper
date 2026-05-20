@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,22 +19,15 @@ func TestConfigRunE(t *testing.T) {
 	// Mock config
 	config.Save(&config.Config{ClientID: "test"})
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	var buf bytes.Buffer
+	configCmd.SetOut(&buf)
+	defer configCmd.SetOut(nil)
 
 	err := configCmd.RunE(configCmd, []string{})
-	
-	w.Close()
-	os.Stdout = oldStdout
-	
 	if err != nil {
 		t.Fatalf("configCmd.RunE error = %v", err)
 	}
 
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
 	if !strings.Contains(buf.String(), "client_id:     test") {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
@@ -58,18 +49,13 @@ func TestConfigSetRunE(t *testing.T) {
 }
 
 func TestVersionRun(t *testing.T) {
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	var buf bytes.Buffer
+	versionCmd.SetOut(&buf)
+	defer versionCmd.SetOut(nil)
 
 	SetVersion("1.2.3")
 	versionCmd.Run(versionCmd, []string{})
 	
-	w.Close()
-	os.Stdout = oldStdout
-	
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
 	if !strings.Contains(buf.String(), "1.2.3") {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
@@ -94,12 +80,17 @@ func TestExportRunE(t *testing.T) {
 	exportEntity = "recoveries"
 	exportFormat = "json"
 
+	var buf bytes.Buffer
+	exportCmd.SetOut(&buf)
+	defer exportCmd.SetOut(nil)
+
 	err := exportCmd.RunE(exportCmd, []string{})
 	if err != nil {
 		t.Fatalf("exportCmd.RunE error = %v", err)
 	}
 
 	exportFormat = "csv"
+	buf.Reset()
 	err = exportCmd.RunE(exportCmd, []string{})
 	if err != nil {
 		t.Fatalf("exportCmd.RunE error = %v", err)
@@ -157,19 +148,11 @@ func TestDoctorRunE(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "whooper.db")
 	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// runDoctor logic uses Printf, so we capture it
-	err := doctorCmd.RunE(doctorCmd, []string{})
-	
-	w.Close()
-	os.Stdout = oldStdout
-	
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	doctorCmd.SetOut(&buf)
+	defer doctorCmd.SetOut(nil)
+
+	err := doctorCmd.RunE(doctorCmd, []string{})
 	
 	// Expected to fail doctor checks due to missing client-id etc.
 	if err == nil {

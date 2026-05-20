@@ -17,12 +17,19 @@ var (
 	exportFormat string
 	exportOutput string
 	exportEntity string
+	exportFrom   string
+	exportTo     string
 )
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export data as JSON or CSV",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		from, to, err := exportDateBounds(exportFrom, exportTo)
+		if err != nil {
+			return err
+		}
+
 		db, err := store.Open(config.DBPath())
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
@@ -32,13 +39,13 @@ var exportCmd = &cobra.Command{
 		var data any
 		switch exportEntity {
 		case "cycles":
-			data, err = db.ListCycles("", "")
+			data, err = db.ListCycles(from, to)
 		case "recoveries":
-			data, err = db.ListRecoveries("", "")
+			data, err = db.ListRecoveries(from, to)
 		case "sleeps":
-			data, err = db.ListSleeps("", "", false)
+			data, err = db.ListSleeps(from, to, false)
 		case "workouts":
-			data, err = db.ListWorkouts("", "")
+			data, err = db.ListWorkouts(from, to)
 		default:
 			return fmt.Errorf("unknown entity %q (valid: cycles, recoveries, sleeps, workouts)", exportEntity)
 		}
@@ -46,7 +53,7 @@ var exportCmd = &cobra.Command{
 			return fmt.Errorf("query %s: %w", exportEntity, err)
 		}
 
-		w := os.Stdout
+		w := cmd.OutOrStdout()
 		if exportOutput != "" {
 			f, err := os.Create(exportOutput)
 			if err != nil {
@@ -144,5 +151,7 @@ func init() {
 	exportCmd.Flags().StringVarP(&exportFormat, "format", "f", "json", "Output format (json, csv)")
 	exportCmd.Flags().StringVarP(&exportOutput, "output", "o", "", "Output file (default: stdout)")
 	exportCmd.Flags().StringVarP(&exportEntity, "entity", "e", "recoveries", "Entity to export (cycles, recoveries, sleeps, workouts)")
+	exportCmd.Flags().StringVar(&exportFrom, "from", "", "Start date (YYYY-MM-DD)")
+	exportCmd.Flags().StringVar(&exportTo, "to", "", "End date (YYYY-MM-DD)")
 	rootCmd.AddCommand(exportCmd)
 }
