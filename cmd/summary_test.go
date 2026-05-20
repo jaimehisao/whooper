@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -159,5 +160,24 @@ func TestSummaryJSON(t *testing.T) {
 	}
 	if err := json.Unmarshal(buf.Bytes(), &report); err != nil {
 		t.Fatalf("Unmarshal JSON: %v\n%s", err, buf.String())
+	}
+}
+
+func TestSummaryDBOpenError(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Use a path that will fail to open as a DB (file where a directory should be)
+	blockedDir := filepath.Join(tmpDir, "blocked")
+	if err := os.WriteFile(blockedDir, []byte("not a directory"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(blockedDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+
+	err := summaryCmd.RunE(summaryCmd, []string{})
+	if err == nil {
+		t.Fatal("expected error for failed db open")
+	}
+	if !strings.Contains(err.Error(), "open database") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

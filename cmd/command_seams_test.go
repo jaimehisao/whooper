@@ -408,3 +408,215 @@ func TestRootRunEDelegatesToTUI(t *testing.T) {
 		t.Fatal("expected root command to delegate to TUI runner")
 	}
 }
+
+func TestSyncRunE_FullSync(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	fake := &fakeSyncFromRunner{}
+	origLoadConfig := syncLoadConfig
+	origLoadToken := syncLoadToken
+	origOpenDB := syncOpenDB
+	origNewClient := syncNewClient
+	origNewSyncer := syncNewSyncer
+	origFull := syncFull
+	defer func() {
+		syncLoadConfig = origLoadConfig
+		syncLoadToken = origLoadToken
+		syncOpenDB = origOpenDB
+		syncNewClient = origNewClient
+		syncNewSyncer = origNewSyncer
+		syncFull = origFull
+	}()
+
+	syncLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	syncLoadToken = func(string) (*oauth2.Token, error) {
+		return &oauth2.Token{AccessToken: "token"}, nil
+	}
+	syncOpenDB = func(string) (*store.DB, error) {
+		return db, nil
+	}
+	syncNewClient = func(oauth2.TokenSource) *api.Client {
+		return &api.Client{}
+	}
+	syncNewSyncer = func(*api.Client, *store.DB, gosync.ProgressFunc) syncRunner {
+		return fake
+	}
+	syncFull = true
+
+	if err := syncCmd.RunE(syncCmd, nil); err != nil {
+		t.Fatalf("syncCmd.RunE error = %v", err)
+	}
+	if fake.start != "full" {
+		t.Fatalf("SyncFrom start = %q, want 'full'", fake.start)
+	}
+}
+
+func TestSyncRunE_IntervalValidation(t *testing.T) {
+	origLoop := syncLoop
+	origInterval := syncInterval
+	defer func() {
+		syncLoop = origLoop
+		syncInterval = origInterval
+	}()
+
+	syncLoop = true
+	syncInterval = 0
+
+	err := syncCmd.RunE(syncCmd, nil)
+	if err == nil {
+		t.Fatal("expected error for zero interval")
+	}
+	if !strings.Contains(err.Error(), "interval must be greater than zero") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSyncRunE_TokenLoadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), filepath.Join(tmpDir, "whooper.db"))
+
+	origLoadConfig := syncLoadConfig
+	origLoadToken := syncLoadToken
+	defer func() {
+		syncLoadConfig = origLoadConfig
+		syncLoadToken = origLoadToken
+	}()
+
+	syncLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	tokenErr := errors.New("token file missing")
+	syncLoadToken = func(string) (*oauth2.Token, error) {
+		return nil, tokenErr
+	}
+
+	err := syncCmd.RunE(syncCmd, nil)
+	if !errors.Is(err, tokenErr) {
+		t.Fatalf("syncCmd.RunE error = %v, want token error", err)
+	}
+	if !strings.Contains(err.Error(), "Run 'whooper login' first") {
+		t.Fatalf("expected login hint, got: %v", err)
+	}
+}
+
+func TestLoginRunE_MissingConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), filepath.Join(tmpDir, "whooper.db"))
+	// Save empty config
+	if err := config.Save(&config.Config{}); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	err := loginCmd.RunE(loginCmd, nil)
+	if err == nil {
+		t.Fatal("expected error for missing config")
+	}
+	if !strings.Contains(err.Error(), "client_id and client_secret must be configured first") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoginRunE_OAuthFlowError(t *testing.T) {
+	tmpDir := t.TempDir()
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), filepath.Join(tmpDir, "whooper.db"))
+	if err := config.Save(&config.Config{ClientID: "id", ClientSecret: "secret"}); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	origOAuthFlow := oauthFlowFunc
+	defer func() { oauthFlowFunc = origOAuthFlow }()
+
+	flowErr := errors.New("auth failed")
+	oauthFlowFunc = func(*oauth2.Config) (*oauth2.Token, error) {
+		return nil, flowErr
+	}
+
+	err := loginCmd.RunE(loginCmd, nil)
+	if !errors.Is(err, flowErr) {
+		t.Fatalf("loginCmd.RunE error = %v, want auth error", err)
+	}
+}
+
+func TestTuiRunE_DBOpenError(t *testing.T) {
+	tmpDir := t.TempDir()
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), filepath.Join(tmpDir, "whooper.db"))
+
+	origOpenDB := tuiOpenDB
+	origLoadConfig := tuiLoadConfig
+	defer func() {
+		tuiOpenDB = origOpenDB
+		tuiLoadConfig = origLoadConfig
+	}()
+
+	dbErr := errors.New("db locked")
+	tuiOpenDB = func(string) (*store.DB, error) {
+		return nil, dbErr
+	}
+	tuiLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+
+	err := tuiCmd.RunE(tuiCmd, nil)
+	if !errors.Is(err, dbErr) {
+		t.Fatalf("tuiCmd.RunE error = %v, want db error", err)
+	}
+}
+
+func TestTuiRunE_NoTokenAllowsLaunch(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "whooper.db")
+	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	origOpenDB := tuiOpenDB
+	origLoadConfig := tuiLoadConfig
+	origLoadToken := tuiLoadToken
+	origRunApp := tuiRunApp
+	defer func() {
+		tuiOpenDB = origOpenDB
+		tuiLoadConfig = origLoadConfig
+		tuiLoadToken = origLoadToken
+		tuiRunApp = origRunApp
+	}()
+
+	tuiOpenDB = func(string) (*store.DB, error) {
+		return db, nil
+	}
+	tuiLoadConfig = func() (*config.Config, error) {
+		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	tuiLoadToken = func(string) (*oauth2.Token, error) {
+		return nil, errors.New("no token")
+	}
+
+	called := false
+	tuiRunApp = func(app *tui.App) error {
+		called = true
+		// Verify sync is NOT available
+		_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+		if cmd != nil {
+			t.Error("expected no sync command when token is missing")
+		}
+		return nil
+	}
+
+	if err := tuiCmd.RunE(tuiCmd, nil); err != nil {
+		t.Fatalf("tuiCmd.RunE error = %v", err)
+	}
+	if !called {
+		t.Fatal("expected TUI to launch even without token")
+	}
+}
