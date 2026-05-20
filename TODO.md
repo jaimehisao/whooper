@@ -7,8 +7,8 @@ test improvements for Whooper.
 
 - [x] Fix alert false positives when today's recovery or strain data is missing; do not treat missing data as zero.
 - [x] Validate `whooper sync --since` as `YYYY-MM-DD` and fail early for invalid dates.
-- [ ] Return structured JSON errors from `/api/*` endpoints instead of plain text responses.
-- [ ] Review existing TODO entries against the current code and remove stale items as features land.
+- [x] Return structured JSON errors from `/api/*` endpoints instead of plain text responses.
+- [x] Review existing TODO entries against the current code and remove stale items as features land.
 
 ## 2) API and export improvements
 
@@ -82,6 +82,6 @@ test improvements for Whooper.
 
 ## 11) Release and distribution
 
-- [ ] Add GoReleaser configuration for tagged releases, checksums, and packaged binaries.
+- [x] Add GoReleaser configuration for tagged releases, checksums, and packaged binaries.
 - [ ] Add an install script or documented `go install` flow with versioned examples.
 - [ ] Add release smoke checks that verify the packaged binary starts and reports the expected version.
