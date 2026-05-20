@@ -3,10 +3,52 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
+func TestSavePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping permission check on Windows")
+	}
+
+	tmpDir := filepath.Join(t.TempDir(), "configdir")
+
+	origDir := dirFunc
+	origPath := pathFunc
+
+	dirFunc = func() string { return tmpDir }
+	pathFunc = func() string { return filepath.Join(tmpDir, "config.yaml") }
+
+	defer func() { dirFunc = origDir; pathFunc = origPath }()
+
+	cfg := &Config{ClientID: "test"}
+	err := Save(cfg)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Check directory permissions
+	dirInfo, err := os.Stat(tmpDir)
+	if err != nil {
+		t.Fatalf("Stat(dir) failed: %v", err)
+	}
+	if mode := dirInfo.Mode().Perm(); mode != 0o700 {
+		t.Errorf("Dir mode = %o, want 0700", mode)
+	}
+
+	// Check file permissions
+	fileInfo, err := os.Stat(Path())
+	if err != nil {
+		t.Fatalf("Stat(file) failed: %v", err)
+	}
+	if mode := fileInfo.Mode().Perm(); mode != 0o600 {
+		t.Errorf("File mode = %o, want 0600", mode)
+	}
+}
+
 func TestDir(t *testing.T) {
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("Cannot get home directory")

@@ -58,10 +58,10 @@ test improvements for Whooper.
 
 ## 8) Security testing and hardening checks
 
-- [ ] Add tests for repeated OAuth callbacks and mismatched-state flows.
-- [ ] Add malformed callback query tests (missing code/state, unexpected params).
-- [ ] Add CI checks for dependency/security drift on PRs (fail on high-severity findings where appropriate).
-- [ ] Review token/config file permissions in tests for supported platforms.
+- [x] Add tests for repeated OAuth callbacks and mismatched-state flows.
+- [x] Add malformed callback query tests (missing code/state, unexpected params).
+- [x] Add CI checks for dependency/security drift on PRs (fail on high-severity findings where appropriate).
+- [x] Review token/config file permissions in tests for supported platforms.
 
 ## 9) Observability and supportability
 

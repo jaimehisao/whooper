@@ -105,6 +105,11 @@ func RunOAuthFlowWithBrowser(oauthCfg *oauth2.Config, openBrowser bool) (*oauth2
 }
 
 func handleOAuthCallback(w http.ResponseWriter, r *http.Request, state, verifier string, exchange tokenExchanger, ch chan oauthResult) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	if r.URL.Query().Get("state") != state {
 		http.Error(w, "invalid state parameter", http.StatusBadRequest)
 		sendOAuthResult(ch, oauthResult{err: errors.New("state mismatch")})

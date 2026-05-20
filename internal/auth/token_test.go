@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -142,6 +143,31 @@ func TestLoadTokenInvalidJSON(t *testing.T) {
 	_, err := LoadToken(tokenPath)
 	if err == nil {
 		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestSaveTokenPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping permission check on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+
+	token := &oauth2.Token{AccessToken: "secret"}
+	err := SaveToken(tokenPath, token)
+	if err != nil {
+		t.Fatalf("SaveToken failed: %v", err)
+	}
+
+	info, err := os.Stat(tokenPath)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+
+	mode := info.Mode().Perm()
+	if mode != 0o600 {
+		t.Errorf("File mode = %o, want 0600", mode)
 	}
 }
 
