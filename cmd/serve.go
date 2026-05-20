@@ -109,8 +109,15 @@ type statusCollector struct {
 	clientSecretConfigured *prometheus.Desc
 	recordsTotal           *prometheus.Desc
 	lastSyncTimestamp      *prometheus.Desc
+	syncAge                *prometheus.Desc
+	syncStale              *prometheus.Desc
+	statusErrorsTotal      *prometheus.Desc
 	latestHealthMetric     *prometheus.Desc
 	latestHealthTimestamp  *prometheus.Desc
+	alertsEnabled          *prometheus.Desc
+	alertThreshold         *prometheus.Desc
+	alertsFiring           *prometheus.Desc
+	alertState             *prometheus.Desc
 }
 
 func newStatusCollector(reporter statusReporter) prometheus.Collector {
@@ -152,6 +159,24 @@ func newStatusCollector(reporter statusReporter) prometheus.Collector {
 			[]string{"entity"},
 			nil,
 		),
+		syncAge: prometheus.NewDesc(
+			"whooper_sync_age_seconds",
+			"Seconds since last successful local sync timestamp for entity; 0 if unknown.",
+			[]string{"entity"},
+			nil,
+		),
+		syncStale: prometheus.NewDesc(
+			"whooper_sync_stale",
+			"1 when sync age is older than 24h, otherwise 0; 0 if unknown.",
+			[]string{"entity"},
+			nil,
+		),
+		statusErrorsTotal: prometheus.NewDesc(
+			"whooper_status_errors_total",
+			"Count of current status-report errors.",
+			nil,
+			nil,
+		),
 		latestHealthMetric: prometheus.NewDesc(
 			"whooper_latest_health_metric",
 			"Latest locally cached WHOOP health metric value.",
@@ -164,6 +189,30 @@ func newStatusCollector(reporter statusReporter) prometheus.Collector {
 			[]string{"entity"},
 			nil,
 		),
+		alertsEnabled: prometheus.NewDesc(
+			"whooper_alerts_enabled",
+			"Whether health alerts are enabled.",
+			nil,
+			nil,
+		),
+		alertThreshold: prometheus.NewDesc(
+			"whooper_alert_threshold",
+			"Configured alert threshold values.",
+			[]string{"type"},
+			nil,
+		),
+		alertsFiring: prometheus.NewDesc(
+			"whooper_alerts_firing",
+			"Number of currently firing alerts.",
+			nil,
+			nil,
+		),
+		alertState: prometheus.NewDesc(
+			"whooper_alert_state",
+			"Current firing state of specific alerts (1 for firing, 0 otherwise).",
+			[]string{"alert"},
+			nil,
+		),
 	}
 }
 
@@ -174,8 +223,15 @@ func (c *statusCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.clientSecretConfigured
 	ch <- c.recordsTotal
 	ch <- c.lastSyncTimestamp
+	ch <- c.syncAge
+	ch <- c.syncStale
+	ch <- c.statusErrorsTotal
 	ch <- c.latestHealthMetric
 	ch <- c.latestHealthTimestamp
+	ch <- c.alertsEnabled
+	ch <- c.alertThreshold
+	ch <- c.alertsFiring
+	ch <- c.alertState
 }
 
 func (c *statusCollector) Collect(ch chan<- prometheus.Metric) {
@@ -185,10 +241,18 @@ func (c *statusCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.clientIDConfigured, prometheus.GaugeValue, boolGauge(report.ClientIDConfigured))
 	ch <- prometheus.MustNewConstMetric(c.clientSecretConfigured, prometheus.GaugeValue, boolGauge(report.ClientSecretConfigured))
 
+	now := time.Now()
 	for _, entity := range statusEntities() {
 		ch <- prometheus.MustNewConstMetric(c.recordsTotal, prometheus.GaugeValue, float64(report.RecordCounts[entity]), entity)
-		ch <- prometheus.MustNewConstMetric(c.lastSyncTimestamp, prometheus.GaugeValue, syncTimestampSeconds(report.LastSync[entity]), entity)
+		ts := syncTimestampSeconds(report.LastSync[entity])
+		ch <- prometheus.MustNewConstMetric(c.lastSyncTimestamp, prometheus.GaugeValue, ts, entity)
+
+		age := syncAgeSeconds(report.LastSync[entity], now)
+		ch <- prometheus.MustNewConstMetric(c.syncAge, prometheus.GaugeValue, age, entity)
+		ch <- prometheus.MustNewConstMetric(c.syncStale, prometheus.GaugeValue, syncStaleGauge(age), entity)
 	}
+
+	ch <- prometheus.MustNewConstMetric(c.statusErrorsTotal, prometheus.GaugeValue, float64(len(report.Errors)))
 
 	if report.LatestHealth != nil {
 		metrics := make([]string, 0, len(report.LatestHealth.Values))
@@ -209,6 +273,40 @@ func (c *statusCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(c.latestHealthTimestamp, prometheus.GaugeValue, healthTimestampSeconds(report.LatestHealth.Timestamps[entity]), entity)
 		}
 	}
+
+	ch <- prometheus.MustNewConstMetric(c.alertsEnabled, prometheus.GaugeValue, boolGauge(report.AlertsEnabled))
+	ch <- prometheus.MustNewConstMetric(c.alertThreshold, prometheus.GaugeValue, report.LowRecoveryThreshold, "low_recovery")
+	ch <- prometheus.MustNewConstMetric(c.alertThreshold, prometheus.GaugeValue, report.HighStrainThreshold, "high_strain")
+	ch <- prometheus.MustNewConstMetric(c.alertsFiring, prometheus.GaugeValue, float64(report.AlertsFiring))
+
+	// Ensure stable output for standard alerts
+	standardAlerts := []string{"low_recovery", "high_strain"}
+	for _, name := range standardAlerts {
+		val := 0
+		if report.AlertStates != nil {
+			val = report.AlertStates[name]
+		}
+		ch <- prometheus.MustNewConstMetric(c.alertState, prometheus.GaugeValue, float64(val), name)
+	}
+
+	// Emit any other custom alerts
+	var otherAlerts []string
+	for name := range report.AlertStates {
+		isStandard := false
+		for _, s := range standardAlerts {
+			if name == s {
+				isStandard = true
+				break
+			}
+		}
+		if !isStandard {
+			otherAlerts = append(otherAlerts, name)
+		}
+	}
+	sort.Strings(otherAlerts)
+	for _, name := range otherAlerts {
+		ch <- prometheus.MustNewConstMetric(c.alertState, prometheus.GaugeValue, float64(report.AlertStates[name]), name)
+	}
 }
 
 func boolGauge(v bool) float64 {
@@ -227,6 +325,28 @@ func syncTimestampSeconds(value string) float64 {
 		return 0
 	}
 	return float64(t.Unix())
+}
+
+func syncAgeSeconds(value string, now time.Time) float64 {
+	if value == "" {
+		return 0
+	}
+	t, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return 0
+	}
+	age := now.Sub(t).Seconds()
+	if age < 0 {
+		return 0
+	}
+	return age
+}
+
+func syncStaleGauge(ageSeconds float64) float64 {
+	if ageSeconds > (24 * time.Hour).Seconds() {
+		return 1
+	}
+	return 0
 }
 
 func healthTimestampSeconds(value string) float64 {

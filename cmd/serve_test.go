@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 
@@ -219,6 +220,80 @@ func TestServeMetricsFromStatusReport(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("GET /metrics missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestServeMetricsAlertStates(t *testing.T) {
+	report := statusReport{
+		AlertsEnabled:        true,
+		LowRecoveryThreshold: 33,
+		HighStrainThreshold:  18,
+		AlertsFiring:         1,
+		AlertStates: map[string]int{
+			"low_recovery": 1,
+			"high_strain":  0,
+		},
+		Errors: []string{"failed to sync"},
+	}
+	handler := newServeHandler(func() statusReport { return report })
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	wants := []string{
+		"whooper_alerts_enabled 1",
+		"whooper_alerts_firing 1",
+		`whooper_alert_state{alert="low_recovery"} 1`,
+		`whooper_alert_state{alert="high_strain"} 0`,
+		`whooper_alert_threshold{type="low_recovery"} 33`,
+		`whooper_alert_threshold{type="high_strain"} 18`,
+		"whooper_status_errors_total 1",
+	}
+	for _, want := range wants {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q in metrics output:\n%s", want, body)
+		}
+	}
+}
+
+func TestServeMetricsSyncFreshness(t *testing.T) {
+	// Use relative time for robustness
+	nowTs := time.Now()
+	recent := nowTs.Add(-1 * time.Hour).Format(time.RFC3339Nano)
+	old := nowTs.Add(-25 * time.Hour).Format(time.RFC3339Nano)
+
+	report := statusReport{
+		LastSync: map[string]string{
+			"cycles":   recent,
+			"sleeps":   old,
+			"workouts": "",
+		},
+	}
+	handler := newServeHandler(func() statusReport { return report })
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+
+	// We can't assert exact age because syncAgeSeconds uses time.Now() again inside Collect
+	// but we can check if the metric is present.
+	if !strings.Contains(body, `whooper_sync_age_seconds{entity="cycles"}`) {
+		t.Error("missing whooper_sync_age_seconds for cycles")
+	}
+
+	wants := []string{
+		`whooper_sync_stale{entity="cycles"} 0`,
+		`whooper_sync_stale{entity="sleeps"} 1`,
+		`whooper_sync_stale{entity="workouts"} 0`,
+	}
+	for _, want := range wants {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q in metrics output:\n%s", want, body)
 		}
 	}
 }

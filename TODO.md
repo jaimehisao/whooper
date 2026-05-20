@@ -68,8 +68,8 @@ test improvements for Whooper.
 - [x] Add `--debug` or verbose mode with structured logs around sync retries/failures.
 - [x] Add tests validating expected debug log events for sync and API failures.
 - [x] Document troubleshooting workflow for collecting logs and reproducing failures.
-- [ ] Add metrics for stale-sync age, API failure counts, last successful sync per entity, and alert state.
-- [ ] Add documented Prometheus alert examples for stale data, missing token, failed sync, and low recovery/high strain.
+- [x] Add metrics for stale-sync age, API failure counts, last successful sync per entity, and alert state.
+- [x] Add documented Prometheus alert examples for stale data, missing token, failed sync, and low recovery/high strain.
 
 ## 10) Grafana bridge and service mode
 

@@ -155,7 +155,7 @@ whooper sync --loop --interval 30m
 whooper serve --addr 0.0.0.0:9464
 ```
 
-Then point Prometheus at `http://<host>:9464/metrics`.
+Then point Prometheus at `http://<host>:9464/metrics`. For alert examples, see [docs/prometheus-alerts.md](docs/prometheus-alerts.md).
 
 The `/api/*` endpoints return JSON from the local SQLite cache. `recovery`,
 `sleep`, `strain`, and `workouts` accept optional query parameters:

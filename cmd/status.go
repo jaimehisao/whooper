@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
+	"git.infra.hisao.org/hisao/whooper/internal/analysis"
 	"git.infra.hisao.org/hisao/whooper/internal/auth"
 	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"git.infra.hisao.org/hisao/whooper/internal/store"
@@ -24,6 +26,11 @@ type statusReport struct {
 	RecordCounts           map[string]int    `json:"record_counts,omitempty"`
 	LastSync               map[string]string `json:"last_sync,omitempty"`
 	LatestHealth           *healthReport     `json:"latest_health,omitempty"`
+	AlertsEnabled          bool              `json:"alerts_enabled"`
+	LowRecoveryThreshold   float64           `json:"low_recovery_threshold"`
+	HighStrainThreshold    float64           `json:"high_strain_threshold"`
+	AlertsFiring           int               `json:"alerts_firing"`
+	AlertStates            map[string]int    `json:"alert_states,omitempty"`
 	Errors                 []string          `json:"errors,omitempty"`
 }
 
@@ -65,6 +72,9 @@ func buildStatusReportWithOpenDB(openDB func(string) (*store.DB, error)) statusR
 		report.ClientIDConfigured = cfg.ClientID != ""
 		report.ClientSecretConfigured = cfg.ClientSecret != ""
 		report.RedirectURL = cfg.RedirectURL
+		report.AlertsEnabled = cfg.Alerts.Enabled
+		report.LowRecoveryThreshold = cfg.Alerts.LowRecovery
+		report.HighStrainThreshold = cfg.Alerts.HighStrain
 	}
 
 	if _, err := auth.LoadToken(config.TokenPath()); err == nil {
@@ -78,6 +88,23 @@ func buildStatusReportWithOpenDB(openDB func(string) (*store.DB, error)) statusR
 	}
 	defer db.Close()
 	report.DBOpen = true
+
+	if cfg != nil {
+		alerts := analysis.CheckAlerts(db, cfg)
+		report.AlertsFiring = len(alerts)
+		report.AlertStates = map[string]int{
+			"low_recovery": 0,
+			"high_strain":  0,
+		}
+		for _, a := range alerts {
+			if strings.Contains(strings.ToLower(a.Message), "recovery") {
+				report.AlertStates["low_recovery"] = 1
+			}
+			if strings.Contains(strings.ToLower(a.Message), "strain") {
+				report.AlertStates["high_strain"] = 1
+			}
+		}
+	}
 
 	report.RecordCounts = map[string]int{}
 	for _, table := range statusEntities() {
