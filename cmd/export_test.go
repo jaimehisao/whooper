@@ -12,7 +12,18 @@ import (
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 )
 
+func resetExportFlags() {
+	exportFormat = "json"
+	exportOutput = ""
+	exportEntity = "recoveries"
+	exportFrom = ""
+	exportTo = ""
+	exportCmd.SetOut(nil)
+}
+
 func TestExportCommandDateFiltering(t *testing.T) {
+	resetExportFlags()
+	defer resetExportFlags()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "whooper.db")
 	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
@@ -21,6 +32,9 @@ func TestExportCommandDateFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open DB: %v", err)
 	}
+	defer db.Close()
+
+	// Seed data for various entities
 	if err := db.SaveRecoveries([]models.Recovery{
 		{CycleID: 1, UserID: 1, CreatedAt: "2024-01-01T07:00:00Z", ScoreState: "SCORED"},
 		{CycleID: 2, UserID: 1, CreatedAt: "2024-01-15T07:00:00Z", ScoreState: "SCORED"},
@@ -28,47 +42,122 @@ func TestExportCommandDateFiltering(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveRecoveries: %v", err)
 	}
-	db.Close()
 
-	// Reset flags after test
-	defer func() {
-		exportFrom = ""
-		exportTo = ""
-		exportEntity = "recoveries"
-		exportFormat = "json"
-		exportOutput = ""
-	}()
+	if err := db.SaveCycles([]models.Cycle{
+		{ID: 10, UserID: 1, Start: "2024-01-01T00:00:00Z", ScoreState: "SCORED"},
+		{ID: 11, UserID: 1, Start: "2024-01-15T12:00:00Z", ScoreState: "SCORED"},
+		{ID: 12, UserID: 1, Start: "2024-01-15T23:59:59Z", ScoreState: "SCORED"},
+		{ID: 13, UserID: 1, Start: "2024-01-16T00:00:01Z", ScoreState: "SCORED"},
+	}); err != nil {
+		t.Fatalf("SaveCycles: %v", err)
+	}
 
-	t.Run("Valid range", func(t *testing.T) {
+	if err := db.SaveSleeps([]models.Sleep{
+		{ID: "20", UserID: 1, Start: "2024-01-01T22:00:00Z", ScoreState: "SCORED"},
+		{ID: "21", UserID: 1, Start: "2024-01-15T22:00:00Z", ScoreState: "SCORED"},
+		{ID: "22", UserID: 1, Start: "2024-01-16T22:00:00Z", ScoreState: "SCORED"},
+	}); err != nil {
+		t.Fatalf("SaveSleeps: %v", err)
+	}
+
+	if err := db.SaveWorkouts([]models.Workout{
+		{ID: "30", UserID: 1, Start: "2024-01-01T10:00:00Z", ScoreState: "SCORED"},
+		{ID: "31", UserID: 1, Start: "2024-01-15T10:00:00Z", ScoreState: "SCORED"},
+		{ID: "32", UserID: 1, Start: "2024-01-15T20:00:00Z", ScoreState: "SCORED"},
+	}); err != nil {
+		t.Fatalf("SaveWorkouts: %v", err)
+	}
+
+	// Helper to reset global flags to defaults before each subtest
+	resetGlobals := resetExportFlags
+
+	t.Run("Recoveries range", func(t *testing.T) {
+		resetGlobals()
 		exportEntity = "recoveries"
-		exportFormat = "json"
 		exportFrom = "2024-01-10"
 		exportTo = "2024-01-20"
-		exportOutput = "" // stdout
 
 		var buf bytes.Buffer
 		exportCmd.SetOut(&buf)
-		defer exportCmd.SetOut(nil)
-
-		err := exportCmd.RunE(exportCmd, nil)
-		if err != nil {
+		if err := exportCmd.RunE(exportCmd, nil); err != nil {
 			t.Fatalf("exportCmd.RunE error = %v", err)
 		}
 
 		var out []models.Recovery
 		if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
-			t.Fatalf("JSON decode error: %v\n%s", err, buf.String())
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		if len(out) != 1 || out[0].CycleID != 2 {
+			t.Errorf("got %d records, want cycle_id 2", len(out))
+		}
+	})
+
+	t.Run("Cycles inclusive to-day", func(t *testing.T) {
+		resetGlobals()
+		exportEntity = "cycles"
+		exportFrom = "2024-01-15"
+		exportTo = "2024-01-15"
+
+		var buf bytes.Buffer
+		exportCmd.SetOut(&buf)
+		if err := exportCmd.RunE(exportCmd, nil); err != nil {
+			t.Fatalf("exportCmd.RunE error = %v", err)
 		}
 
-		if len(out) != 1 {
-			t.Fatalf("got %d records, want 1", len(out))
+		var out []models.Cycle
+		if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
 		}
-		if out[0].CycleID != 2 {
-			t.Fatalf("got cycle_id %d, want 2", out[0].CycleID)
+		// Should include both ID 11 (noon) and ID 12 (just before midnight)
+		if len(out) != 2 {
+			t.Errorf("got %d cycles, want 2 (inclusive to-day)", len(out))
+		}
+	})
+
+	t.Run("Sleeps range", func(t *testing.T) {
+		resetGlobals()
+		exportEntity = "sleeps"
+		exportFrom = "2024-01-01"
+		exportTo = "2024-01-15"
+
+		var buf bytes.Buffer
+		exportCmd.SetOut(&buf)
+		if err := exportCmd.RunE(exportCmd, nil); err != nil {
+			t.Fatalf("exportCmd.RunE error = %v", err)
+		}
+
+		var out []models.Sleep
+		if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		if len(out) != 2 {
+			t.Errorf("got %d sleeps, want 2", len(out))
+		}
+	})
+
+	t.Run("Workouts range", func(t *testing.T) {
+		resetGlobals()
+		exportEntity = "workouts"
+		exportFrom = "2024-01-15"
+		exportTo = "2024-01-31"
+
+		var buf bytes.Buffer
+		exportCmd.SetOut(&buf)
+		if err := exportCmd.RunE(exportCmd, nil); err != nil {
+			t.Fatalf("exportCmd.RunE error = %v", err)
+		}
+
+		var out []models.Workout
+		if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		if len(out) != 2 {
+			t.Errorf("got %d workouts, want 2", len(out))
 		}
 	})
 
 	t.Run("Invalid from date", func(t *testing.T) {
+		resetGlobals()
 		exportFrom = "invalid"
 		err := exportCmd.RunE(exportCmd, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid 'from' date") {
@@ -77,6 +166,7 @@ func TestExportCommandDateFiltering(t *testing.T) {
 	})
 
 	t.Run("To before from", func(t *testing.T) {
+		resetGlobals()
 		exportFrom = "2024-01-20"
 		exportTo = "2024-01-10"
 		err := exportCmd.RunE(exportCmd, nil)

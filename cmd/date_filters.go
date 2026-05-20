@@ -47,8 +47,10 @@ func exportDateBounds(from, to string) (string, string, error) {
 	toBound := ""
 	if to != "" {
 		toDate, _ := parseDateOnly("to", to)
-		// Include the entire day by setting to the last nanosecond of the day
-		toBound = toDate.Add(24*time.Hour - time.Nanosecond).Format(time.RFC3339Nano)
+		// Include the entire day. Using 23:59:59Z is robust for string comparisons
+		// against RFC3339 timestamps (with or without fractional seconds) because
+		// '.' and '+' and '-' all sort before 'Z'.
+		toBound = toDate.Add(24*time.Hour - time.Second).Format(time.RFC3339)
 	}
 
 	return fromBound, toBound, nil

@@ -12,11 +12,11 @@ test improvements for Whooper.
 
 ## 2) API and export improvements
 
-- [ ] Add `from=YYYY-MM-DD` and `to=YYYY-MM-DD` filters to `/api/recovery`, `/api/sleep`, `/api/strain`, and `/api/workouts`.
-- [ ] Keep `limit` handling for API endpoints, but document defaults, maximums, and invalid-value behavior.
-- [ ] Add `whooper export --from YYYY-MM-DD --to YYYY-MM-DD` for date-bounded exports.
-- [ ] Add tests for API date filters, limit bounds, and JSON error responses.
-- [ ] Add tests for export date filtering across cycles, recoveries, sleeps, and workouts.
+- [x] Add `from=YYYY-MM-DD` and `to=YYYY-MM-DD` filters to `/api/recovery`, `/api/sleep`, `/api/strain`, and `/api/workouts`.
+- [x] Keep `limit` handling for API endpoints, but document defaults, maximums, and invalid-value behavior.
+- [x] Add `whooper export --from YYYY-MM-DD --to YYYY-MM-DD` for date-bounded exports.
+- [x] Add tests for API date filters, limit bounds, and JSON error responses.
+- [x] Add tests for export date filtering across cycles, recoveries, sleeps, and workouts.
 
 ## 3) CLI usability features
 

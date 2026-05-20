@@ -82,6 +82,7 @@ func setupTestDB(t *testing.T, env *CLIEnv) *store.DB {
 }
 
 func runCmd(t *testing.T, args []string) (string, error) {
+	resetExportFlags()
 	buf := bytes.Buffer{}
 	errBuf := bytes.Buffer{}
 	rootCmd.SetOut(&buf)
@@ -218,7 +219,6 @@ func TestExportCmd_InvalidFormat(t *testing.T) {
 }
 
 func TestExportCmd_WithData(t *testing.T) {
-	t.Skip("Skipping due to test isolation issue")
 	env := setupCLIEnv(t)
 	db := setupTestDB(t, env)
 	defer db.Close()
