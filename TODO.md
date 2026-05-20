@@ -1,56 +1,87 @@
 # TODO Backlog
 
-This backlog tracks the next production-hardening and test-improvement work.
+This backlog tracks production hardening, correctness fixes, feature work, and
+test improvements for Whooper.
 
-## 1) TUI behavior tests
+## 1) Correctness fixes
+
+- [ ] Fix alert false positives when today's recovery or strain data is missing; do not treat missing data as zero.
+- [ ] Validate `whooper sync --since` as `YYYY-MM-DD` and fail early for invalid dates.
+- [ ] Return structured JSON errors from `/api/*` endpoints instead of plain text responses.
+- [ ] Review existing TODO entries against the current code and remove stale items as features land.
+
+## 2) API and export improvements
+
+- [ ] Add `from=YYYY-MM-DD` and `to=YYYY-MM-DD` filters to `/api/recovery`, `/api/sleep`, `/api/strain`, and `/api/workouts`.
+- [ ] Keep `limit` handling for API endpoints, but document defaults, maximums, and invalid-value behavior.
+- [ ] Add `whooper export --from YYYY-MM-DD --to YYYY-MM-DD` for date-bounded exports.
+- [ ] Add tests for API date filters, limit bounds, and JSON error responses.
+- [ ] Add tests for export date filtering across cycles, recoveries, sleeps, and workouts.
+
+## 3) CLI usability features
+
+- [ ] Add `whooper summary` or `whooper inspect` with latest recovery, HRV, sleep debt, strain, workouts, and last sync state.
+- [ ] Add alert configuration commands, such as enabling/disabling alerts and setting low-recovery/high-strain thresholds.
+- [ ] Improve command errors with next-step hints for missing config, missing token, empty database, and failed database open.
+- [ ] Add unit tests for success/failure paths in `sync`, `login`, `tui`, summary/inspect, and alert configuration commands.
+
+## 4) TUI behavior and polish
 
 - [ ] Add model tests for `internal/tui/app.go` (`Init`, `Update`, `View`).
 - [ ] Add tab switch and keybinding navigation tests.
 - [ ] Add sync state tests (`syncing`, success message, error message, clear message tick).
 - [ ] Add window resize propagation tests to child views.
 - [ ] Add range-change and workout detail toggle tests for `internal/tui/views/*`.
+- [ ] Add explicit empty states when no local data exists.
+- [ ] Show last-sync timestamp and stale-data state in the dashboard/status area.
+- [ ] Add a compact today/detail panel with current recovery, sleep, strain, and workout context.
 
-## 2) Command-layer tests and dependency injection
-
-- [x] Add test seams/factories in `cmd/sync.go` for OAuth token source and syncer creation.
-- [x] Add test seams in `cmd/login.go` for OAuth flow runner and token persistence.
-- [x] Add test seams in `cmd/tui.go` for sync function construction and app runner.
-- [ ] Add unit tests for success/failure paths in `sync`, `login`, and `tui` commands.
-
-## 3) End-to-end smoke tests in CI
+## 5) End-to-end smoke tests in CI
 
 - [ ] Add CI smoke test job that builds the binary and runs core CLI commands in a temp home dir.
 - [ ] Add smoke checks for `whooper config`, `whooper export`, and non-interactive command paths.
+- [ ] Add smoke checks for `whooper doctor --skip-api`, `whooper status --json`, and API/server construction where feasible.
 - [ ] Ensure smoke tests run on pull requests and block merges on failure.
 
-## 4) Data-quality and property tests
+## 6) Data-quality and property tests
 
 - [ ] Add fuzz/property tests for pagination token handling in `internal/api/pagination.go`.
 - [ ] Add property tests for trend/correlation query invariants in `internal/store/queries.go`.
 - [ ] Add formatter edge-case tests (empty data, NaN handling, large ranges, invalid timestamps).
+- [ ] Add tests for SQL views (`daily_recovery`, `daily_sleep`, `daily_strain`, `workout_summary`) to lock their public shape.
 
-## 5) Migration resilience tests
+## 7) Migration resilience tests
 
 - [x] Add upgrade tests from older schema versions to current in `internal/store/migrations.go`.
 - [x] Add idempotency test for reopening DB and rerunning migrations.
 - [x] Assert expected index existence after migration.
 
-## 6) Security testing and hardening checks
+## 8) Security testing and hardening checks
 
 - [ ] Add tests for repeated OAuth callbacks and mismatched-state flows.
 - [ ] Add malformed callback query tests (missing code/state, unexpected params).
 - [ ] Add CI checks for dependency/security drift on PRs (fail on high-severity findings where appropriate).
+- [ ] Review token/config file permissions in tests for supported platforms.
 
-## 7) Observability and supportability
+## 9) Observability and supportability
 
 - [x] Add `--debug` or verbose mode with structured logs around sync retries/failures.
 - [x] Add tests validating expected debug log events for sync and API failures.
 - [x] Document troubleshooting workflow for collecting logs and reproducing failures.
+- [ ] Add metrics for stale-sync age, API failure counts, last successful sync per entity, and alert state.
+- [ ] Add documented Prometheus alert examples for stale data, missing token, failed sync, and low recovery/high strain.
 
-## 8) Grafana bridge and service mode
+## 10) Grafana bridge and service mode
 
 - [x] Add `whooper sync --loop --interval <duration>` or a dedicated daemon command for background syncing.
 - [x] Add HTTP API endpoints for Grafana-friendly health data queries backed by the local SQLite cache.
 - [x] Expand `/metrics` beyond bridge health to include latest recovery, HRV, RHR, sleep, strain, and workout summary gauges.
 - [x] Document Prometheus scrape configuration and Grafana dashboard setup for service-mode deployments.
-- [ ] Add SQL views or stable query examples for Grafana panels (`daily_recovery`, `daily_sleep`, `daily_strain`, `workout_summary`).
+- [x] Add SQL views or stable query examples for Grafana panels (`daily_recovery`, `daily_sleep`, `daily_strain`, `workout_summary`).
+- [ ] Add a combined service mode that syncs on an interval and serves HTTP from one command/process.
+
+## 11) Release and distribution
+
+- [ ] Add GoReleaser configuration for tagged releases, checksums, and packaged binaries.
+- [ ] Add an install script or documented `go install` flow with versioned examples.
+- [ ] Add release smoke checks that verify the packaged binary starts and reports the expected version.
