@@ -118,3 +118,95 @@ func TestCheckAlerts_HighStrain(t *testing.T) {
 		t.Error("expected alerts for high strain")
 	}
 }
+
+func TestCheckAlerts_NoDataDoesNotAlert(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	cfg := &config.Config{
+		Alerts: config.Alerts{
+			LowRecovery: 33,
+			HighStrain:  18,
+			Enabled:     true,
+		},
+	}
+
+	alerts := CheckAlerts(db, cfg)
+	if len(alerts) != 0 {
+		t.Fatalf("len(alerts) = %d, want 0: %+v", len(alerts), alerts)
+	}
+}
+
+func TestCheckAlerts_MissingRecoveryDoesNotBlockHighStrain(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := db.SaveCycles([]models.Cycle{
+		{ID: 1, UserID: 123, Start: now, ScoreState: "SCORED", Score: &models.CycleScore{Strain: 19.5}},
+	}); err != nil {
+		t.Fatalf("SaveCycles: %v", err)
+	}
+
+	cfg := &config.Config{
+		Alerts: config.Alerts{
+			LowRecovery: 33,
+			HighStrain:  18,
+			Enabled:     true,
+		},
+	}
+
+	alerts := CheckAlerts(db, cfg)
+	if len(alerts) != 1 {
+		t.Fatalf("len(alerts) = %d, want 1: %+v", len(alerts), alerts)
+	}
+	if alerts[0].Message != "High strain: 19.5 (threshold: 18)" {
+		t.Fatalf("alert message = %q, want high strain alert", alerts[0].Message)
+	}
+}
+
+func TestCheckAlerts_MissingStrainDoesNotAddAlert(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+
+	db, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open DB: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := db.SaveRecoveries([]models.Recovery{
+		{CycleID: 1, UserID: 123, CreatedAt: now, ScoreState: "SCORED", Score: &models.RecoveryScore{RecoveryScore: 20}},
+	}); err != nil {
+		t.Fatalf("SaveRecoveries: %v", err)
+	}
+
+	cfg := &config.Config{
+		Alerts: config.Alerts{
+			LowRecovery: 33,
+			HighStrain:  18,
+			Enabled:     true,
+		},
+	}
+
+	alerts := CheckAlerts(db, cfg)
+	if len(alerts) != 1 {
+		t.Fatalf("len(alerts) = %d, want 1: %+v", len(alerts), alerts)
+	}
+	if alerts[0].Message != "Low recovery: 20% (threshold: 33%)" {
+		t.Fatalf("alert message = %q, want low recovery alert", alerts[0].Message)
+	}
+}
