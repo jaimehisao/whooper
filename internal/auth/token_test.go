@@ -11,7 +11,7 @@ import (
 )
 
 var testTime = time.Now()
-var assertError = errors.New("assert error")
+var errAssert = errors.New("assert error")
 
 func TestSaveAndLoadToken(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -113,12 +113,12 @@ func TestPersistingTokenSourceNoRefresh(t *testing.T) {
 }
 
 func TestPersistingTokenSourceError(t *testing.T) {
-	src := &mockTokenSource{err: assertError}
+	src := &mockTokenSource{err: errAssert}
 	persisting := PersistingTokenSource("/dev/null/token.json", src)
 
 	_, err := persisting.Token()
-	if err != assertError {
-		t.Errorf("Token() error = %v, want %v", err, assertError)
+	if err != errAssert {
+		t.Errorf("Token() error = %v, want %v", err, errAssert)
 	}
 }
 

@@ -53,7 +53,7 @@ var syncCmd = &cobra.Command{
 
 		token, err := syncLoadToken(syncTokenPath())
 		if err != nil {
-			return fmt.Errorf("load token: %w\nRun 'whooper login' first.", err)
+			return fmt.Errorf("load token: %w; run 'whooper login' first", err)
 		}
 		debugf("token loaded token_path=%s", syncTokenPath())
 
