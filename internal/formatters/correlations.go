@@ -37,11 +37,8 @@ func FormatCorrelationData(points []store.CorrelationPoint, xMetric, yMetric str
 		return result
 	}
 
-	var xVals, yVals []float64
 	for _, p := range points {
 		result.Points = append(result.Points, CorrelationPoint{X: p.X, Y: p.Y})
-		xVals = append(xVals, p.X)
-		yVals = append(yVals, p.Y)
 	}
 
 	return result
