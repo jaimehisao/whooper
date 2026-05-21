@@ -9,7 +9,7 @@ on:
     types: [published]
 
 env:
-  GO_VERSION: "1.24"
+  GO_VERSION: "1.25"
   STATICCHECK_VERSION: "2025.1"
   GOVULNCHECK_VERSION: "v1.1.4"
   TOTAL_COVERAGE_MIN: "90"
@@ -56,9 +56,14 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5

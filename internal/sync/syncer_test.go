@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-var assertError = errors.New("assert error")
+var errAssert = errors.New("assert error")
 
 func TestNew(t *testing.T) {
 	syncer := New(nil, nil, nil)
 	if syncer == nil {
-		t.Error("New() returned nil")
+		t.Fatal("New() returned nil")
 	}
 	if syncer.onProgress != nil {
 		t.Error("onProgress should be nil")
@@ -82,7 +82,7 @@ func TestGetSyncStartWithOverlapEmpty(t *testing.T) {
 }
 
 func TestGetSyncStartWithOverlapError(t *testing.T) {
-	db := &mockDBForSync{syncErr: assertError}
+	db := &mockDBForSync{syncErr: errAssert}
 	result := GetSyncStartWithOverlap(db)
 	if result != "" {
 		t.Errorf("GetSyncStartWithOverlap(err) = %q, want empty", result)

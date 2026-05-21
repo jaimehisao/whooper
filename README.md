@@ -64,7 +64,25 @@ whooper
 | `whooper summary` | Show latest health metrics and sync state (alias: inspect) |
 | `whooper doctor --json` | Run machine-readable readiness checks |
 | `whooper status --json` | Show local config, token, database, and sync state |
+<<<<<<< HEAD
 | `whooper export -e <entity> -f <format> [--from YYYY-MM-DD] [--to YYYY-MM-DD]` | Export data (entities: cycles, recoveries, sleeps, workouts; formats: json, csv) |
+=======
+| `whooper export -e <entity> -f <format>` | Export data (entities: cycles, recoveries, sleeps, workouts; formats: json, csv) |
+| `whooper serve --addr 127.0.0.1:9464` | Serve local health, status, and Prometheus metrics endpoints |
+| `whooper version` | Print CLI version information |
+
+## Testing
+
+Use these contributor verification commands locally:
+
+```bash
+make lint
+make test-short
+make test
+```
+
+CI smoke execution details are in `.github/workflows/ci.yml` (`smoke` job).
+>>>>>>> github/main
 
 ## Troubleshooting
 

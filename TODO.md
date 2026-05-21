@@ -20,10 +20,16 @@ test improvements for Whooper.
 
 ## 3) CLI usability features
 
+<<<<<<< HEAD
 - [x] Add `whooper summary` or `whooper inspect` with latest recovery, HRV, sleep debt, strain, workouts, and last sync state.
 - [x] Add alert configuration commands, such as enabling/disabling alerts and setting low-recovery/high-strain thresholds.
 - [x] Improve command errors with next-step hints for missing config, missing token, empty database, and failed database open.
 - [x] Add unit tests for success/failure paths in `sync`, `login`, `tui`, summary/inspect, and alert configuration commands.
+=======
+- [x] Add CI smoke test job that builds the binary and runs core CLI commands in a temp home dir.
+- [x] Add smoke checks for `whooper config`, `whooper export`, and non-interactive command paths.
+- [ ] Ensure smoke tests are configured as required checks for protected branches.
+>>>>>>> github/main
 
 ## 4) TUI behavior and polish
 
