@@ -43,6 +43,7 @@ whooper
 | `whooper sync` | Fetch latest data from Whoop API |
 | `whooper sync --debug` | Fetch data with local diagnostic output |
 | `whooper sync --loop --interval 30m` | Keep syncing in the foreground on an interval |
+| `whooper service --addr 0.0.0.0:9464 --interval 30m` | Run combined sync loop and HTTP API server |
 | `whooper config` | Show current configuration |
 | `whooper config set <key> <value>` | Set config (client-id, client-secret, redirect-url) |
 | `whooper alerts` | Show alert configuration (alias: status, show) |
@@ -151,11 +152,12 @@ and latest cached WHOOP health gauges. Health gauges are exposed as
 For a simple background bridge on a host, run:
 
 ```bash
-whooper sync --loop --interval 30m
-whooper serve --addr 0.0.0.0:9464
+whooper service --addr 0.0.0.0:9464 --interval 30m
 ```
 
-Then point Prometheus at `http://<host>:9464/metrics`. For alert examples, see [docs/prometheus-alerts.md](docs/prometheus-alerts.md).
+This runs both the periodic sync loop and the HTTP API server in a single
+process. Then point Prometheus at `http://<host>:9464/metrics`. For alert
+examples, see [docs/prometheus-alerts.md](docs/prometheus-alerts.md).
 
 The `/api/*` endpoints return JSON from the local SQLite cache. `recovery`,
 `sleep`, `strain`, and `workouts` accept optional query parameters:

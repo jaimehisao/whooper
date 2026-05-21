@@ -78,7 +78,7 @@ test improvements for Whooper.
 - [x] Expand `/metrics` beyond bridge health to include latest recovery, HRV, RHR, sleep, strain, and workout summary gauges.
 - [x] Document Prometheus scrape configuration and Grafana dashboard setup for service-mode deployments.
 - [x] Add SQL views or stable query examples for Grafana panels (`daily_recovery`, `daily_sleep`, `daily_strain`, `workout_summary`).
-- [ ] Add a combined service mode that syncs on an interval and serves HTTP from one command/process.
+- [x] Add a combined service mode that syncs on an interval and serves HTTP from one command/process.
 
 ## 11) Release and distribution
 

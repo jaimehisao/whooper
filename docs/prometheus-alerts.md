@@ -1,6 +1,12 @@
 # Prometheus Alert Examples for Whooper
 
-These alert rules are designed for use with a Prometheus instance scraping the `whooper serve` or `whooper sync --loop` `/metrics` endpoint.
+These alert rules are designed for use with a Prometheus instance scraping the
+`whooper service` or `whooper serve` `/metrics` endpoint.
+
+> [!NOTE]
+> While `whooper sync --loop` performs periodic synchronization, it does not
+> expose an HTTP server. To scrape metrics during a sync loop, use the
+> combined `whooper service` command or run `whooper serve` in parallel.
 
 ## Sync Staleness
 

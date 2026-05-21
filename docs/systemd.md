@@ -1,6 +1,11 @@
 # systemd Deployment
 
-These example units run Whooper as a local bridge service:
+These example units run Whooper as a local bridge service. The recommended path
+is the combined `whooper service` command:
+
+- `whooper.service` runs both sync loop and HTTP API in one process.
+
+Alternatively, you can run them as separate units:
 
 - `whooper-sync.service` keeps the SQLite cache fresh with `whooper sync --loop`.
 - `whooper-serve.service` exposes `/healthz`, `/status`, `/metrics`, and `/api/*`.
@@ -20,6 +25,27 @@ WHOOPER_HOME=/var/lib/whooper whooper login --no-browser
 ## User Service
 
 Use user services when the data directory is owned by your user.
+
+`~/.config/systemd/user/whooper.service`:
+
+```ini
+[Unit]
+Description=Whooper sync and HTTP API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=WHOOPER_HOME=/var/lib/whooper
+ExecStart=/usr/local/bin/whooper service --addr 0.0.0.0:9464 --interval 30m
+Restart=always
+RestartSec=30s
+
+[Install]
+WantedBy=default.target
+```
+
+## Separate Services (Optional)
 
 `~/.config/systemd/user/whooper-sync.service`:
 
