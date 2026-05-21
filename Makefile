@@ -32,3 +32,6 @@ benchmark:
 
 release-snapshot:
 	goreleaser release --snapshot --clean
+
+release-smoke:
+	bash ./scripts/release-smoke.sh $(VERSION)

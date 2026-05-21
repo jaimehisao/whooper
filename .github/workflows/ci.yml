@@ -142,10 +142,21 @@ jobs:
 
       - name: Set version
         run: |
-          VERSION=${{ github.ref_name }}
+          VERSION=${GITHUB_REF_NAME#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Run GoReleaser
+      - name: Build release artifacts
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean --skip=publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Release Smoke Check
+        run: make release-smoke VERSION=${{ env.VERSION }}
+
+      - name: Run GoReleaser (Publish)
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
