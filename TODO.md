@@ -83,5 +83,5 @@ test improvements for Whooper.
 ## 11) Release and distribution
 
 - [x] Add GoReleaser configuration for tagged releases, checksums, and packaged binaries.
-- [ ] Add an install script or documented `go install` flow with versioned examples.
+- [x] Add an install script or documented `go install` flow with versioned examples.
 - [ ] Add release smoke checks that verify the packaged binary starts and reports the expected version.

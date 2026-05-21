@@ -10,6 +10,17 @@ A CLI tool that syncs your [Whoop](https://www.whoop.com/) health data via the W
 - **Local SQLite Storage** — Pure-Go SQLite (no CGO), WAL mode, flat schema optimized for analytics
 - **Export** — JSON and CSV export for all data types
 
+## Prerequisites
+
+- **Go 1.24.x** or later (for building from source)
+
+## Installation
+
+See [docs/install.md](docs/install.md) for detailed installation instructions, including:
+- Installing via `go install`
+- Building from source with `make install`
+- Downloading pre-built binaries from the repository releases page
+
 ## Backlog
 
 - Track upcoming production hardening and testing work in `TODO.md`.
