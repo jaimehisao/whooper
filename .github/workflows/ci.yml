@@ -161,7 +161,7 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Build release artifacts
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: latest
           args: release --clean --skip=publish
@@ -172,7 +172,7 @@ jobs:
         run: make release-smoke VERSION=${{ env.VERSION }}
 
       - name: Run GoReleaser (Publish)
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: latest
           args: release --clean
