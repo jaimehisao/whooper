@@ -133,80 +133,7 @@ func TestSyncRunE_UsesInjectedSyncerAndSince(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 func TestSyncRunE_LoopRunsOnInterval(t *testing.T) {
-=======
-func TestSyncRunE_ReturnsWrappedSyncError(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "whooper.db")
-	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
-	db, err := store.Open(dbPath)
-	if err != nil {
-		t.Fatalf("Open DB: %v", err)
-	}
-	defer db.Close()
-
-	syncErr := errors.New("sync failed")
-	fake := &fakeSyncFromRunner{err: syncErr}
-	origLoadConfig := syncLoadConfig
-	origLoadToken := syncLoadToken
-	origOpenDB := syncOpenDB
-	origNewClient := syncNewClient
-	origNewSyncer := syncNewSyncer
-	origFull := syncFull
-	origSince := syncSince
-	origDebug := syncDebug
-	defer func() {
-		syncLoadConfig = origLoadConfig
-		syncLoadToken = origLoadToken
-		syncOpenDB = origOpenDB
-		syncNewClient = origNewClient
-		syncNewSyncer = origNewSyncer
-		syncFull = origFull
-		syncSince = origSince
-		syncDebug = origDebug
-	}()
-
-	syncLoadConfig = func() (*config.Config, error) {
-		return &config.Config{ClientID: "id", ClientSecret: "secret"}, nil
-	}
-	syncLoadToken = func(string) (*oauth2.Token, error) {
-		return &oauth2.Token{AccessToken: "token"}, nil
-	}
-	syncOpenDB = func(string) (*store.DB, error) {
-		return db, nil
-	}
-	syncNewClient = func(oauth2.TokenSource) *api.Client {
-		return &api.Client{}
-	}
-	syncNewSyncer = func(*api.Client, *store.DB, gosync.ProgressFunc) syncRunner {
-		return fake
-	}
-	syncFull = false
-	syncSince = ""
-	syncDebug = true
-
-	var out bytes.Buffer
-	syncCmd.SetOut(&out)
-	defer syncCmd.SetOut(nil)
-
-	err = syncCmd.RunE(syncCmd, nil)
-	if !errors.Is(err, syncErr) {
-		t.Fatalf("syncCmd.RunE error = %v, want wrapped sync error", err)
-	}
-	if !strings.Contains(err.Error(), "sync:") {
-		t.Fatalf("expected wrapped sync error prefix, got: %v", err)
-	}
-	if fake.start != "" {
-		t.Fatalf("SyncFrom start = %q, want default empty start", fake.start)
-	}
-	if !strings.Contains(out.String(), "[debug] sync failed error=") {
-		t.Fatalf("expected debug failure output, got:\n%s", out.String())
-	}
-}
-
-func TestSyncRunE_FullFlagUsesFullStart(t *testing.T) {
->>>>>>> github/main
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "whooper.db")
 	config.SetTestPaths(tmpDir, filepath.Join(tmpDir, "config.yaml"), dbPath)
@@ -222,36 +149,24 @@ func TestSyncRunE_FullFlagUsesFullStart(t *testing.T) {
 	origOpenDB := syncOpenDB
 	origNewClient := syncNewClient
 	origNewSyncer := syncNewSyncer
-<<<<<<< HEAD
 	origLoop := syncLoop
 	origInterval := syncInterval
 	origIterations := syncLoopIterations
 	origSleep := syncSleep
 	origFull := syncFull
 	origSince := syncSince
-=======
-	origFull := syncFull
-	origSince := syncSince
-	origDebug := syncDebug
->>>>>>> github/main
 	defer func() {
 		syncLoadConfig = origLoadConfig
 		syncLoadToken = origLoadToken
 		syncOpenDB = origOpenDB
 		syncNewClient = origNewClient
 		syncNewSyncer = origNewSyncer
-<<<<<<< HEAD
 		syncLoop = origLoop
 		syncInterval = origInterval
 		syncLoopIterations = origIterations
 		syncSleep = origSleep
 		syncFull = origFull
 		syncSince = origSince
-=======
-		syncFull = origFull
-		syncSince = origSince
-		syncDebug = origDebug
->>>>>>> github/main
 	}()
 
 	syncLoadConfig = func() (*config.Config, error) {
@@ -269,7 +184,6 @@ func TestSyncRunE_FullFlagUsesFullStart(t *testing.T) {
 	syncNewSyncer = func(*api.Client, *store.DB, gosync.ProgressFunc) syncRunner {
 		return fake
 	}
-<<<<<<< HEAD
 	syncLoop = true
 	syncInterval = time.Second
 	syncLoopIterations = 2
@@ -287,16 +201,10 @@ func TestSyncRunE_FullFlagUsesFullStart(t *testing.T) {
 	var out bytes.Buffer
 	syncCmd.SetOut(&out)
 	defer syncCmd.SetOut(nil)
-=======
-	syncFull = true
-	syncSince = "2024-01-15"
-	syncDebug = false
->>>>>>> github/main
 
 	if err := syncCmd.RunE(syncCmd, nil); err != nil {
 		t.Fatalf("syncCmd.RunE error = %v", err)
 	}
-<<<<<<< HEAD
 	if fake.calls != 2 {
 		t.Fatalf("SyncFrom calls = %d, want 2", fake.calls)
 	}
@@ -357,10 +265,6 @@ func TestSyncRunE_UnauthorizedSuggestsLogin(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "run 'whooper login' again") {
 		t.Fatalf("expected login hint, got: %v", err)
-=======
-	if fake.start != "full" {
-		t.Fatalf("SyncFrom start = %q, want full", fake.start)
->>>>>>> github/main
 	}
 }
 
@@ -599,7 +503,7 @@ func TestSyncRunE_TokenLoadError(t *testing.T) {
 	if !errors.Is(err, tokenErr) {
 		t.Fatalf("syncCmd.RunE error = %v, want token error", err)
 	}
-	if !strings.Contains(err.Error(), "Run 'whooper login' first") {
+	if !strings.Contains(err.Error(), "run 'whooper login' first") {
 		t.Fatalf("expected login hint, got: %v", err)
 	}
 }

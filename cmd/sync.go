@@ -44,77 +44,7 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Fetch data from the Whoop API and store locally",
 	RunE: func(cmd *cobra.Command, args []string) error {
-<<<<<<< HEAD
 		return runSyncCommand(cmd)
-=======
-		debugf := func(format string, args ...any) {
-			if syncDebug {
-				fmt.Fprintf(cmd.OutOrStdout(), "[debug] "+format+"\n", args...)
-			}
-		}
-
-		cfg, err := syncLoadConfig()
-		if err != nil {
-			return fmt.Errorf("load config: %w", err)
-		}
-		debugf("config loaded client_id_configured=%t client_secret_configured=%t", cfg.ClientID != "", cfg.ClientSecret != "")
-
-		token, err := syncLoadToken(syncTokenPath())
-		if err != nil {
-			return fmt.Errorf("load token: %w; run 'whooper login' first", err)
-		}
-		debugf("token loaded token_path=%s", syncTokenPath())
-
-		oauthCfg := auth.OAuthConfig(cfg)
-		tokenSource := auth.PersistingTokenSource(
-			syncTokenPath(),
-			oauthCfg.TokenSource(context.Background(), token),
-		)
-
-		client := syncNewClient(tokenSource)
-		db, err := syncOpenDB(syncDBPath())
-		if err != nil {
-			return fmt.Errorf("open database: %w", err)
-		}
-		defer db.Close()
-		debugf("database opened db_path=%s", syncDBPath())
-
-		syncer := syncNewSyncer(client, db, func(entity string, count int) {
-			fmt.Printf("  %s: %d records\n", entity, count)
-		})
-
-		start := ""
-		switch {
-		case syncFull:
-			fmt.Println("Performing full re-sync from Whoop...")
-			start = "full"
-		case syncSince != "":
-			fmt.Printf("Syncing data from %s...\n", syncSince)
-			start = syncSince + "T00:00:00.000Z"
-		default:
-			fmt.Println("Syncing data from Whoop...")
-		}
-		debugf("sync start=%q full=%t since=%q", start, syncFull, syncSince)
-
-		if err := syncer.SyncFrom(start); err != nil {
-			debugf("sync failed error=%q", err.Error())
-			return fmt.Errorf("sync: %w", err)
-		}
-		fmt.Println("Sync complete!")
-
-		// Check alerts
-		alerts := analysis.CheckAlerts(db, cfg)
-		debugf("alerts evaluated count=%d", len(alerts))
-		for _, a := range alerts {
-			switch a.Level {
-			case "critical":
-				fmt.Printf("  [!] %s\n", a.Message)
-			default:
-				fmt.Printf("  [*] %s\n", a.Message)
-			}
-		}
-		return nil
->>>>>>> github/main
 	},
 }
 
@@ -173,7 +103,7 @@ func runSyncOnce(cmd *cobra.Command) error {
 
 	token, err := syncLoadToken(syncTokenPath())
 	if err != nil {
-		return fmt.Errorf("load token: %w\nRun 'whooper login' first.", err)
+		return fmt.Errorf("load token: %w; run 'whooper login' first", err)
 	}
 	debugf("token loaded token_path=%s", syncTokenPath())
 
