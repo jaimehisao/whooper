@@ -58,6 +58,7 @@ func (db *DB) SaveWorkouts(workouts []models.Workout) error {
 }
 
 func (db *DB) ListWorkouts(from, to string) ([]models.Workout, error) {
+	from, to = NormalizeBounds(from, to)
 	query := `SELECT id, user_id, created_at, updated_at, start, end, sport_id, score_state,
 		strain, average_heart_rate, max_heart_rate, kilojoule,
 		percent_recorded, distance_meter, altitude_gain_meter, altitude_change_meter,

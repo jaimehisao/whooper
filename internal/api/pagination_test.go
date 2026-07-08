@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-resty/resty/v2"
@@ -233,6 +234,38 @@ func TestFetchPaginated_RepeatedNextTokenStops(t *testing.T) {
 	}
 	if callCount != 2 {
 		t.Fatalf("callCount = %d, want 2", callCount)
+	}
+}
+
+func TestFetchPaginated_MaxPagesReturnsError(t *testing.T) {
+	prev := maxPages
+	maxPages = 3
+	t.Cleanup(func() { maxPages = prev })
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		resp := paginatedResponse[testItem]{
+			Records:   []testItem{{ID: callCount}},
+			NextToken: fmt.Sprintf("page-%d", callCount+1),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	err := FetchPaginated[testItem](client, "/items", nil, func(records []testItem) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected truncation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "pagination truncated") {
+		t.Fatalf("error = %q, want pagination truncated", err)
+	}
+	if callCount != 3 {
+		t.Fatalf("callCount = %d, want 3", callCount)
 	}
 }
 

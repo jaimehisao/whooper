@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,6 +169,26 @@ func TestSaveTokenPermissions(t *testing.T) {
 	mode := info.Mode().Perm()
 	if mode != 0o600 {
 		t.Errorf("File mode = %o, want 0600", mode)
+	}
+}
+
+func TestLoadTokenRejectsPermissiveMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping permission check on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+	if err := os.WriteFile(tokenPath, []byte(`{"access_token":"x"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := LoadToken(tokenPath)
+	if err == nil {
+		t.Fatal("expected error for world-readable token file")
+	}
+	if !strings.Contains(err.Error(), "overly permissive") {
+		t.Fatalf("error = %q, want overly permissive", err)
 	}
 }
 

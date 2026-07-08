@@ -40,6 +40,7 @@ func (db *DB) SaveCycles(cycles []models.Cycle) error {
 }
 
 func (db *DB) ListCycles(from, to string) ([]models.Cycle, error) {
+	from, to = NormalizeBounds(from, to)
 	query := `SELECT id, user_id, created_at, updated_at, start, end, days, score_state,
 		strain, kilojoule, average_heart_rate, max_heart_rate FROM cycle WHERE 1=1`
 	args := []any{}

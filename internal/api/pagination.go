@@ -7,7 +7,8 @@ import (
 	"net/http"
 )
 
-const maxPages = 10000
+// maxPages caps pagination to avoid unbounded API loops. Overridable in tests.
+var maxPages = 10000
 
 type paginatedResponse[T any] struct {
 	Records   []T    `json:"records"`
@@ -42,6 +43,8 @@ func FetchAll[T any](c *Client, endpoint string, params map[string]string) ([]T,
 
 // FetchPaginated retrieves records from a paginated Whoop API endpoint and calls the
 // provided function for each page of results. This is more memory-efficient for large datasets.
+// If pagination does not terminate before maxPages, an error is returned so callers
+// do not treat a truncated result set as a successful full sync.
 func FetchPaginated[T any](c *Client, endpoint string, params map[string]string, fn func([]T) error) error {
 	nextToken := ""
 
@@ -71,9 +74,10 @@ func FetchPaginated[T any](c *Client, endpoint string, params map[string]string,
 		}
 
 		if pr.NextToken == "" || pr.NextToken == nextToken {
-			break
+			return nil
 		}
 		nextToken = pr.NextToken
 	}
-	return nil
+
+	return fmt.Errorf("fetch %s: pagination truncated after %d pages (next_token still present)", endpoint, maxPages)
 }

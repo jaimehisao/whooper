@@ -53,6 +53,7 @@ func (db *DB) SaveSleeps(sleeps []models.Sleep) error {
 }
 
 func (db *DB) ListSleeps(from, to string, excludeNaps bool) ([]models.Sleep, error) {
+	from, to = NormalizeBounds(from, to)
 	query := `SELECT id, user_id, created_at, updated_at, start, end, nap, score_state,
 		total_in_bed_time_milli, total_awake_time_milli, total_no_data_time_milli,
 		total_light_sleep_time_milli, total_slow_wave_sleep_time_milli, total_rem_sleep_time_milli,

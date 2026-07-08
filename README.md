@@ -114,13 +114,15 @@ whooper sync
 docker compose up -d
 ```
 
-Grafana is exposed at `http://localhost:3000`. The compose file installs the
-`frser-sqlite-datasource` plugin, mounts `~/.whooper/whooper.db` read-only at
-`/data/whooper.db`, provisions a `Whooper` datasource, and loads dashboards from
-`grafana/provisioning/dashboards/json`.
+Grafana is exposed at `http://127.0.0.1:3000` (host loopback only). The compose
+file installs the `frser-sqlite-datasource` plugin, mounts `~/.whooper/whooper.db`
+read-only at `/data/whooper.db`, provisions a `Whooper` datasource, and loads
+dashboards from `grafana/provisioning/dashboards/json`.
 
 The compose stack also includes a `whooper` bridge service. It mounts the same
-data directory, keeps syncing in a loop, and exposes `/metrics` on port `9464`:
+data directory, keeps syncing in a loop, and publishes `/metrics` on
+`127.0.0.1:9464` (not the LAN). The HTTP API has no authentication — do not
+change the published bind to `0.0.0.0` unless you accept that risk.
 
 ```bash
 # Optional: choose a data directory other than ~/.whooper
@@ -128,6 +130,9 @@ export WHOOPER_HOME=/var/lib/whooper
 
 # Optional: change the sync cadence
 export WHOOPER_SYNC_INTERVAL=15m
+
+# Optional: set Grafana admin password (default: changeme)
+export GF_SECURITY_ADMIN_PASSWORD=changeme
 
 docker compose up -d --build whooper grafana
 ```

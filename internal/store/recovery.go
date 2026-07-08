@@ -43,6 +43,7 @@ func (db *DB) SaveRecoveries(recoveries []models.Recovery) error {
 }
 
 func (db *DB) ListRecoveries(from, to string) ([]models.Recovery, error) {
+	from, to = NormalizeBounds(from, to)
 	query := `SELECT cycle_id, sleep_id, user_id, created_at, updated_at, score_state,
 		user_calibrating, recovery_score, resting_heart_rate, hrv_rmssd,
 		spo2_percentage, skin_temp_celsius FROM recovery WHERE 1=1`

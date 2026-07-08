@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -54,7 +55,10 @@ func (m *CorrelationsModel) Refresh() tea.Cmd {
 	return func() tea.Msg {
 		xMetric := metricNames[xIdx]
 		yMetric := metricNames[yIdx]
-		data, err := db.GetCorrelationData(xMetric, yMetric)
+		now := time.Now().UTC()
+		from := now.Add(-90 * 24 * time.Hour).Format("2006-01-02")
+		to := now.Format("2006-01-02")
+		data, err := db.GetCorrelationDataInRange(xMetric, yMetric, from, to)
 		if err != nil {
 			return correlationDataMsg{err: err}
 		}

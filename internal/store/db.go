@@ -21,6 +21,9 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SQLite allows only one writer; keep a single connection to avoid
+	// SQLITE_BUSY storms from concurrent Begin() calls.
+	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, err

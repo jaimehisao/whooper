@@ -605,10 +605,16 @@ func TestTuiRunE_NoTokenAllowsLaunch(t *testing.T) {
 	called := false
 	tuiRunApp = func(app *tui.App) error {
 		called = true
-		// Verify sync is NOT available
+		// Sync should not start, but should show a login-required message.
 		_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-		if cmd != nil {
-			t.Error("expected no sync command when token is missing")
+		if app.Syncing() {
+			t.Error("expected sync not to start when token is missing")
+		}
+		if app.SyncMessage() == "" {
+			t.Error("expected login-required sync message when token is missing")
+		}
+		if cmd == nil {
+			t.Error("expected clear-tick command for login-required feedback")
 		}
 		return nil
 	}

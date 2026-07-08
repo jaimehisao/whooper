@@ -122,8 +122,14 @@ func TestApp_UpdateAdditionalBranches(t *testing.T) {
 
 	app.syncing = false
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	if cmd != nil || app.syncing {
+	if app.syncing {
 		t.Fatalf("sync without syncFunc should not start")
+	}
+	if app.syncMsg == "" || !app.syncErr {
+		t.Fatalf("sync without syncFunc should show login-required error, got msg=%q err=%v", app.syncMsg, app.syncErr)
+	}
+	if cmd == nil {
+		t.Fatal("sync without syncFunc should schedule clear tick")
 	}
 
 	_, cmd = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})

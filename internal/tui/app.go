@@ -34,6 +34,16 @@ func NewApp(syncFn func() error) *App {
 	}
 }
 
+// Syncing reports whether an in-progress sync was started from the TUI.
+func (a *App) Syncing() bool {
+	return a.syncing
+}
+
+// SyncMessage returns the current sync status message (for tests/UX checks).
+func (a *App) SyncMessage() string {
+	return a.syncMsg
+}
+
 // SetViews sets the 5 tab views. Called externally since views import tui package.
 func (a *App) SetViews(dashboard, recovery, sleep, workouts, correlations tea.Model) {
 	a.views = [5]tea.Model{dashboard, recovery, sleep, workouts, correlations}
@@ -117,7 +127,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, a.keys.PrevTab):
 			newTab = (a.activeTab + 4) % 5
 		case key.Matches(msg, a.keys.Sync):
-			if !a.syncing && a.syncFunc != nil {
+			if a.syncFunc == nil {
+				a.syncMsg = "Login required: run 'whooper login'"
+				a.syncErr = true
+				return a, tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
+					return clearSyncMsg{}
+				})
+			}
+			if !a.syncing {
 				a.syncing = true
 				a.syncMsg = "Syncing..."
 				a.syncErr = false
@@ -165,18 +182,24 @@ func (a *App) View() string {
 		content = a.views[a.activeTab].View()
 	}
 
-	// Status Bar
+	// Status Bar — context-sensitive help (avoid conflicting key hints).
 	helpParts := []string{
 		MutedStyle.Render("q quit"),
-		MutedStyle.Render("s sync"),
-		MutedStyle.Render("1-5 tabs"),
-		MutedStyle.Render("< > range"),
 	}
-	if a.activeTab == 3 { // Workouts tab
-		helpParts = append(helpParts, MutedStyle.Render("j/k nav"), MutedStyle.Render("enter detail"))
+	if a.syncFunc != nil {
+		helpParts = append(helpParts, MutedStyle.Render("s sync"))
+	} else {
+		helpParts = append(helpParts, MutedStyle.Render("s needs login"))
 	}
-	if a.activeTab == 4 { // Correlations tab
+	helpParts = append(helpParts, MutedStyle.Render("1-5 tabs"))
+	switch a.activeTab {
+	case 1, 2, 3: // Recovery, Sleep, Workouts
+		helpParts = append(helpParts, MutedStyle.Render("< > range"))
+	case 4: // Correlations
 		helpParts = append(helpParts, MutedStyle.Render("< > X"), MutedStyle.Render("[ ] Y"))
+	}
+	if a.activeTab == 3 {
+		helpParts = append(helpParts, MutedStyle.Render("j/k nav"), MutedStyle.Render("enter detail"))
 	}
 
 	helpBar := lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(helpParts, "  "))
@@ -205,7 +228,12 @@ func (a *App) View() string {
 		syncBar,
 	)
 
-	// Ensure the status bar is at the bottom of the content area
+	chrome := 4 // tab bar + blank lines + status bar
+	contentHeight := a.height - chrome
+	if contentHeight > 0 {
+		content = clipToHeight(content, contentHeight)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left,
 		tabBar,
 		"",
@@ -213,6 +241,21 @@ func (a *App) View() string {
 		"",
 		statusBar,
 	)
+}
+
+func clipToHeight(content string, maxLines int) string {
+	if maxLines <= 0 {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	if len(lines) <= maxLines {
+		return content
+	}
+	clipped := lines[:maxLines]
+	if maxLines >= 1 {
+		clipped[maxLines-1] = MutedStyle.Render("… (resize or switch tabs)")
+	}
+	return strings.Join(clipped, "\n")
 }
 
 func RunApp(app *App) error {

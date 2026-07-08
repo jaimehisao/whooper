@@ -190,13 +190,20 @@ func TestCheckAlerts(t *testing.T) {
 	}
 
 	cfg := &config.Config{Alerts: config.Alerts{Enabled: true, LowRecovery: 33, HighStrain: 18}}
-	alerts := CheckAlerts(db, cfg)
+	alerts, err := CheckAlerts(db, cfg)
+	if err != nil {
+		t.Fatalf("CheckAlerts: %v", err)
+	}
 	if len(alerts) != 2 {
 		t.Fatalf("len(alerts) = %d, want 2", len(alerts))
 	}
 
 	disabled := &config.Config{Alerts: config.Alerts{Enabled: false, LowRecovery: 33, HighStrain: 18}}
-	if got := CheckAlerts(db, disabled); got != nil {
+	got, err := CheckAlerts(db, disabled)
+	if err != nil {
+		t.Fatalf("CheckAlerts disabled: %v", err)
+	}
+	if got != nil {
 		t.Fatalf("CheckAlerts with disabled config should return nil")
 	}
 }

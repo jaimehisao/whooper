@@ -14,25 +14,39 @@ type Alert struct {
 }
 
 // CheckAlerts evaluates today's data against configured thresholds.
-func CheckAlerts(db *store.DB, cfg *config.Config) []Alert {
+// Missing today's recovery or strain does not produce an alert.
+// When multiple scored rows exist for today, the latest is used.
+// Database errors are returned so callers can surface them instead of
+// silently treating failures as "no alerts".
+func CheckAlerts(db *store.DB, cfg *config.Config) ([]Alert, error) {
 	if !cfg.Alerts.Enabled {
-		return nil
+		return nil, nil
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")
 
 	var alerts []Alert
-	recoveries, err := db.GetRecoveryTrend(today, "")
-	if err == nil && len(recoveries) > 0 {
-		alerts = append(alerts, evaluateRecoveryAlert(recoveries[0].RecoveryScore, cfg.Alerts.LowRecovery)...)
+	recoveries, err := db.GetRecoveryTrend(today, today)
+	if err != nil {
+		return nil, fmt.Errorf("recovery trend: %w", err)
+	}
+	if len(recoveries) > 0 {
+		// GetRecoveryTrend returns one row per day ordered ascending; with a
+		// single-day window that is today's latest scored recovery.
+		latest := recoveries[len(recoveries)-1]
+		alerts = append(alerts, evaluateRecoveryAlert(latest.RecoveryScore, cfg.Alerts.LowRecovery)...)
 	}
 
-	strains, err := db.GetStrainTrend(today, "")
-	if err == nil && len(strains) > 0 {
-		alerts = append(alerts, evaluateStrainAlert(strains[0].Strain, cfg.Alerts.HighStrain)...)
+	strains, err := db.GetStrainTrend(today, today)
+	if err != nil {
+		return nil, fmt.Errorf("strain trend: %w", err)
+	}
+	if len(strains) > 0 {
+		latest := strains[len(strains)-1]
+		alerts = append(alerts, evaluateStrainAlert(latest.Strain, cfg.Alerts.HighStrain)...)
 	}
 
-	return alerts
+	return alerts, nil
 }
 
 // EvaluateAlerts checks recovery and strain values against thresholds without DB access.

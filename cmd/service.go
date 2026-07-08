@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -42,17 +43,31 @@ Prometheus and Grafana.`,
 			syncFull, syncSince, syncDebug = origFull, origSince, origDebug
 		}()
 
+		// Capture for the HTTP goroutine so tests can restore package globals
+		// without racing against a still-running listener.
+		addr := serviceAddr
+		listen := serveListenAndServe
 		handler := newServeHandler(buildServeStatusReport)
 		errCh := make(chan error, 1)
+		serverDone := make(chan struct{})
+		fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", addr)
 		go func() {
-			fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", serviceAddr)
-			if err := serveListenAndServe(serviceAddr, handler); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			defer close(serverDone)
+			if err := listen(addr, handler); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTP server error: %w", err)
 			}
 		}()
+		defer func() { <-serverDone }()
 
 		iterations := 0
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			// Run sync immediately on startup and then on interval
 			if err := runSyncOnce(cmd); err != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "Sync error: %v\n", err)
@@ -71,13 +86,17 @@ Prometheus and Grafana.`,
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Next sync in %s...\n", serviceInterval)
-			syncSleep(serviceInterval)
-
-			// Check for server errors after sleeping
+			done := make(chan struct{})
+			go func() {
+				syncSleep(serviceInterval)
+				close(done)
+			}()
 			select {
+			case <-ctx.Done():
+				return ctx.Err()
 			case err := <-errCh:
 				return err
-			default:
+			case <-done:
 			}
 		}
 

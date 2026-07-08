@@ -377,6 +377,59 @@ func TestGetSyncState_SetSyncState(t *testing.T) {
 	}
 }
 
+func TestGetRecoveryTrend_DateOnlyToIncludesLastDay(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.SaveRecoveries([]models.Recovery{
+		{
+			CycleID: 1, SleepID: "10", UserID: 100,
+			CreatedAt: "2024-01-08T07:00:00Z", UpdatedAt: "2024-01-08T07:00:00Z",
+			ScoreState: "SCORED",
+			Score:      &models.RecoveryScore{RecoveryScore: 70, RestingHeartRate: 50, HRVRmssd: 40},
+		},
+	}); err != nil {
+		t.Fatalf("SaveRecoveries: %v", err)
+	}
+
+	points, err := db.GetRecoveryTrend("2024-01-08", "2024-01-08")
+	if err != nil {
+		t.Fatalf("GetRecoveryTrend: %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("len(points) = %d, want 1 (date-only to must include mid-day timestamps)", len(points))
+	}
+}
+
+func TestGetRecoveryTrend_DeduplicatesSameDay(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.SaveRecoveries([]models.Recovery{
+		{
+			CycleID: 1, SleepID: "10", UserID: 100,
+			CreatedAt: "2024-01-08T06:00:00Z", UpdatedAt: "2024-01-08T06:00:00Z",
+			ScoreState: "SCORED",
+			Score:      &models.RecoveryScore{RecoveryScore: 20, RestingHeartRate: 50, HRVRmssd: 30},
+		},
+		{
+			CycleID: 2, SleepID: "11", UserID: 100,
+			CreatedAt: "2024-01-08T12:00:00Z", UpdatedAt: "2024-01-08T12:00:00Z",
+			ScoreState: "SCORED",
+			Score:      &models.RecoveryScore{RecoveryScore: 80, RestingHeartRate: 48, HRVRmssd: 55},
+		},
+	}); err != nil {
+		t.Fatalf("SaveRecoveries: %v", err)
+	}
+
+	points, err := db.GetRecoveryTrend("2024-01-08", "2024-01-08")
+	if err != nil {
+		t.Fatalf("GetRecoveryTrend: %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("len(points) = %d, want 1 (one row per day)", len(points))
+	}
+	if points[0].RecoveryScore != 80 {
+		t.Fatalf("RecoveryScore = %v, want latest (80)", points[0].RecoveryScore)
+	}
+}
+
 func TestGetRecoveryTrend(t *testing.T) {
 	db := openTestDB(t)
 

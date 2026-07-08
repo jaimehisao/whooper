@@ -8,19 +8,28 @@ services:
       - /bin/sh
       - -c
     command:
+      # Container must listen on 0.0.0.0 for Docker port publishing to work.
+      # Host publish is bound to 127.0.0.1 so the unauthenticated API is not
+      # exposed on the LAN. Override ports to "9464:9464" only if you accept that risk.
       - whooper sync --loop --interval "$${WHOOPER_SYNC_INTERVAL}" & exec whooper serve --addr 0.0.0.0:9464
     ports:
-      - "9464:9464"
+      - "127.0.0.1:9464:9464"
     volumes:
       - ${WHOOPER_HOME:-${HOME}/.whooper}:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9464/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.5.2
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=whooper
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-changeme}
       - GF_INSTALL_PLUGINS=frser-sqlite-datasource
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning

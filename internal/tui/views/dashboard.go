@@ -8,6 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"git.infra.hisao.org/hisao/whooper/internal/analysis"
+	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"git.infra.hisao.org/hisao/whooper/internal/models"
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 	"git.infra.hisao.org/hisao/whooper/internal/tui"
@@ -16,7 +18,10 @@ import (
 
 type DashboardModel struct {
 	db             *store.DB
+	cfg            *config.Config
+	canSync        bool
 	width          int
+	height         int
 	recoveryScore  float64
 	hrvValue       float64
 	rhrValue       float64
@@ -36,7 +41,17 @@ type DashboardModel struct {
 }
 
 func NewDashboard(db *store.DB) DashboardModel {
-	return DashboardModel{db: db, width: 80}
+	return DashboardModel{db: db, width: 80, canSync: true}
+}
+
+// SetConfig attaches alert configuration used by the dashboard.
+func (m *DashboardModel) SetConfig(cfg *config.Config) {
+	m.cfg = cfg
+}
+
+// SetCanSync controls whether the dashboard prompts the user to press 's'.
+func (m *DashboardModel) SetCanSync(can bool) {
+	m.canSync = can
 }
 
 type dashboardDataMsg struct {
@@ -62,10 +77,12 @@ func (m *DashboardModel) Init() tea.Cmd {
 
 func (m *DashboardModel) Refresh() tea.Cmd {
 	db := m.db
+	cfg := m.cfg
 	return func() tea.Msg {
 		now := time.Now().UTC()
 		weekAgo := now.Add(-7 * 24 * time.Hour).Format("2006-01-02")
 		monthAgo := now.Add(-30 * 24 * time.Hour).Format("2006-01-02")
+		today := now.Format("2006-01-02")
 
 		msg := dashboardDataMsg{}
 		var errs []string
@@ -75,7 +92,7 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 			msg.lastSync, _ = time.Parse(time.RFC3339, lastSyncStr)
 		}
 
-		recoveries, err := db.GetRecoveryTrend(monthAgo, "")
+		recoveries, err := db.GetRecoveryTrend(monthAgo, today)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("recovery: %v", err))
 		} else if len(recoveries) > 0 {
@@ -86,7 +103,7 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 			msg.recDate = latest.Date
 		}
 
-		sleeps, err := db.GetSleepTrend(monthAgo, "")
+		sleeps, err := db.GetSleepTrend(monthAgo, today)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("sleep: %v", err))
 		} else if len(sleeps) > 0 {
@@ -96,7 +113,7 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 			msg.sleepDate = latest.Date
 		}
 
-		strains, err := db.GetStrainTrend(monthAgo, "")
+		strains, err := db.GetStrainTrend(monthAgo, today)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("strain: %v", err))
 		} else if len(strains) > 0 {
@@ -105,7 +122,7 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 			msg.strainDate = latest.Date
 		}
 
-		weekRecoveries, err := db.GetRecoveryTrend(weekAgo, "")
+		weekRecoveries, err := db.GetRecoveryTrend(weekAgo, today)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("week recovery: %v", err))
 		}
@@ -114,7 +131,7 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 			msg.sparkline = append(msg.sparkline, r.RecoveryScore)
 		}
 
-		workouts, err := db.ListWorkouts(weekAgo, "")
+		workouts, err := db.ListWorkouts(weekAgo, today)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("workouts: %v", err))
 		}
@@ -123,12 +140,15 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 		}
 		msg.workouts = workouts
 
-		// Generate alerts from today's data
-		if msg.recovery > 0 && msg.recovery < 33 {
-			msg.alerts = append(msg.alerts, fmt.Sprintf("Low recovery: %.0f%%", msg.recovery))
-		}
-		if msg.strain > 18 {
-			msg.alerts = append(msg.alerts, fmt.Sprintf("High strain: %.1f", msg.strain))
+		if cfg != nil {
+			alerts, alertErr := analysis.CheckAlerts(db, cfg)
+			if alertErr != nil {
+				errs = append(errs, fmt.Sprintf("alerts: %v", alertErr))
+			} else {
+				for _, a := range alerts {
+					msg.alerts = append(msg.alerts, a.Message)
+				}
+			}
 		}
 
 		if len(errs) > 0 {
@@ -159,6 +179,7 @@ func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loaded = true
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 	}
 	return m, nil
 }
@@ -171,10 +192,13 @@ func (m *DashboardModel) View() string {
 	sparkW := m.sparkWidth()
 	sections := make([]string, 0, 10+len(m.alerts))
 
-	// Status line: Last Sync
 	statusLine := ""
 	if m.lastSync.IsZero() {
-		statusLine = tui.YellowStyle.Render("Never synced. Press 's' to sync.")
+		if m.canSync {
+			statusLine = tui.YellowStyle.Render("Never synced. Press 's' to sync.")
+		} else {
+			statusLine = tui.YellowStyle.Render("Never synced. Run 'whooper login' then sync.")
+		}
 	} else {
 		since := time.Since(m.lastSync).Round(time.Minute)
 		status := fmt.Sprintf("Last sync: %s ago", since)
@@ -204,7 +228,6 @@ func (m *DashboardModel) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
-	// Today / Detail Panel
 	todayPanel := m.renderTodayPanel(sparkW)
 	sections = append(sections, "", todayPanel)
 

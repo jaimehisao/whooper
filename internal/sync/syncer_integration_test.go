@@ -160,10 +160,17 @@ func TestSyncFromAggregatesEntityErrors(t *testing.T) {
 
 	got, stateErr := db.GetSyncState("cycles")
 	if stateErr != nil {
-		t.Fatalf("GetSyncState error = %v", stateErr)
+		t.Fatalf("GetSyncState(cycles) error = %v", stateErr)
 	}
-	if got != "" {
-		t.Fatalf("sync state should remain empty on aggregate failure, got %q", got)
+	if got == "" {
+		t.Fatalf("cycles sync state should advance on success even if recoveries fail, got empty")
+	}
+	gotRec, stateErr := db.GetSyncState("recoveries")
+	if stateErr != nil {
+		t.Fatalf("GetSyncState(recoveries) error = %v", stateErr)
+	}
+	if gotRec != "" {
+		t.Fatalf("recoveries sync state should remain empty on failure, got %q", gotRec)
 	}
 }
 

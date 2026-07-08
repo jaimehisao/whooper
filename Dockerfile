@@ -8,6 +8,8 @@ RUN go build -o /out/whooper .
 
 FROM alpine:3.21
 
+RUN apk add --no-cache wget
+
 COPY --from=build /out/whooper /usr/local/bin/whooper
 
 ENV WHOOPER_HOME=/data

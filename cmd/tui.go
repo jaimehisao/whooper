@@ -53,8 +53,10 @@ var tuiCmd = &cobra.Command{
 
 		// Build sync function if a token is available.
 		var syncFn func() error
+		canSync := false
 		token, tokErr := tuiLoadToken(tuiTokenPath())
 		if tokErr == nil {
+			canSync = true
 			oauthCfg := auth.OAuthConfig(cfg)
 			tokenSource := auth.PersistingTokenSource(
 				tuiTokenPath(),
@@ -70,6 +72,8 @@ var tuiCmd = &cobra.Command{
 		app := tui.NewApp(syncFn)
 
 		dashboard := views.NewDashboard(db)
+		dashboard.SetConfig(cfg)
+		dashboard.SetCanSync(canSync)
 		recovery := views.NewRecovery(db)
 		sleep := views.NewSleep(db)
 		workouts := views.NewWorkouts(db)

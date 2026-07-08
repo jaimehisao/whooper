@@ -90,18 +90,22 @@ func buildStatusReportWithOpenDB(openDB func(string) (*store.DB, error)) statusR
 	report.DBOpen = true
 
 	if cfg != nil {
-		alerts := analysis.CheckAlerts(db, cfg)
-		report.AlertsFiring = len(alerts)
-		report.AlertStates = map[string]int{
-			"low_recovery": 0,
-			"high_strain":  0,
-		}
-		for _, a := range alerts {
-			if strings.Contains(strings.ToLower(a.Message), "recovery") {
-				report.AlertStates["low_recovery"] = 1
+		alerts, alertErr := analysis.CheckAlerts(db, cfg)
+		if alertErr != nil {
+			report.Errors = append(report.Errors, fmt.Sprintf("check alerts: %v", alertErr))
+		} else {
+			report.AlertsFiring = len(alerts)
+			report.AlertStates = map[string]int{
+				"low_recovery": 0,
+				"high_strain":  0,
 			}
-			if strings.Contains(strings.ToLower(a.Message), "strain") {
-				report.AlertStates["high_strain"] = 1
+			for _, a := range alerts {
+				if strings.Contains(strings.ToLower(a.Message), "recovery") {
+					report.AlertStates["low_recovery"] = 1
+				}
+				if strings.Contains(strings.ToLower(a.Message), "strain") {
+					report.AlertStates["high_strain"] = 1
+				}
 			}
 		}
 	}

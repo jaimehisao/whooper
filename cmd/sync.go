@@ -61,7 +61,14 @@ func runSyncCommand(cmd *cobra.Command) error {
 	}
 
 	iterations := 0
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := runSyncOnce(cmd); err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Sync error: %v\n", err)
 		}
@@ -70,7 +77,16 @@ func runSyncCommand(cmd *cobra.Command) error {
 			return nil
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Next sync in %s...\n", syncInterval)
-		syncSleep(syncInterval)
+		done := make(chan struct{})
+		go func() {
+			syncSleep(syncInterval)
+			close(done)
+		}()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-done:
+		}
 	}
 }
 
@@ -110,7 +126,7 @@ func runSyncOnce(cmd *cobra.Command) error {
 	oauthCfg := auth.OAuthConfig(cfg)
 	tokenSource := auth.PersistingTokenSource(
 		syncTokenPath(),
-		oauthCfg.TokenSource(context.Background(), token),
+		oauthCfg.TokenSource(cmd.Context(), token),
 	)
 
 	client := syncNewClient(tokenSource)
@@ -148,14 +164,19 @@ func runSyncOnce(cmd *cobra.Command) error {
 	fmt.Fprintln(out, "Sync complete!")
 
 	// Check alerts
-	alerts := analysis.CheckAlerts(db, cfg)
-	debugf("alerts evaluated count=%d", len(alerts))
-	for _, a := range alerts {
-		switch a.Level {
-		case "critical":
-			fmt.Fprintf(out, "  [!] %s\n", a.Message)
-		default:
-			fmt.Fprintf(out, "  [*] %s\n", a.Message)
+	alerts, alertErr := analysis.CheckAlerts(db, cfg)
+	if alertErr != nil {
+		debugf("alerts evaluation failed error=%q", alertErr.Error())
+		fmt.Fprintf(out, "Alert check failed: %v\n", alertErr)
+	} else {
+		debugf("alerts evaluated count=%d", len(alerts))
+		for _, a := range alerts {
+			switch a.Level {
+			case "critical":
+				fmt.Fprintf(out, "  [!] %s\n", a.Message)
+			default:
+				fmt.Fprintf(out, "  [*] %s\n", a.Message)
+			}
 		}
 	}
 	return nil
