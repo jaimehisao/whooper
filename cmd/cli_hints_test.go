@@ -58,7 +58,7 @@ func TestSyncCommandHints(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "Hint: run 'whooper login' or 'whooper sync' to initialize the database.") {
+		if !strings.Contains(err.Error(), "Hint: run 'whooper login' or 'whooper sync' to initialize the database") {
 			t.Errorf("expected db hint, got: %v", err)
 		}
 	})
