@@ -2,6 +2,7 @@ package formatters
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"git.infra.hisao.org/hisao/whooper/internal/store"
@@ -69,10 +70,19 @@ func TestCorrelationDescription(t *testing.T) {
 	if desc == "" {
 		t.Error("expected non-empty description")
 	}
+	if !strings.Contains(desc, "r=0.80") {
+		t.Errorf("positive description missing r value: %s", desc)
+	}
 
 	desc = CorrelationDescription("recovery", "hrv", -0.6)
 	if desc == "" {
 		t.Error("expected non-empty description")
+	}
+	if !strings.Contains(desc, "r=-0.60") {
+		t.Errorf("negative description missing r value: %s", desc)
+	}
+	if strings.Contains(desc, "(r=-)") {
+		t.Errorf("negative correlation still formats as bare dash: %s", desc)
 	}
 
 	desc = CorrelationDescription("recovery", "hrv", 0.2)

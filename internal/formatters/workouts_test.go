@@ -64,7 +64,7 @@ func TestFormatWorkoutTable(t *testing.T) {
 			ID:      "7",
 			Start:   "2024-01-15T10:00:00Z",
 			End:     "2024-01-15T11:30:00Z",
-			SportID: 1,
+			SportID: 0,
 			Score:   &models.WorkoutScore{Strain: 15.5},
 		},
 		{
@@ -178,14 +178,14 @@ func TestJoinStrings(t *testing.T) {
 }
 
 func TestSportName(t *testing.T) {
-	if SportName(1) != "Running" {
-		t.Errorf("SportName(1) = %s, want Running", SportName(1))
+	if SportName(0) != "Running" {
+		t.Errorf("SportName(0) = %s, want Running", SportName(0))
 	}
-	if SportName(2) != "Cycling" {
-		t.Errorf("SportName(2) = %s, want Cycling", SportName(2))
+	if SportName(1) != "Cycling" {
+		t.Errorf("SportName(1) = %s, want Cycling", SportName(1))
 	}
-	if SportName(999) != "" {
-		t.Errorf("SportName(999) = %s, want empty", SportName(999))
+	if SportName(999) != "Unknown" {
+		t.Errorf("SportName(999) = %s, want Unknown", SportName(999))
 	}
 }
 

@@ -24,29 +24,6 @@ type WorkoutRow struct {
 	HasScore     bool
 }
 
-var sportIDToName = map[int]string{
-	1:  "Running",
-	2:  "Cycling",
-	3:  "Swimming",
-	4:  "Weightlifting",
-	5:  "HIIT",
-	6:  "Yoga",
-	7:  "Rowing",
-	8:  "Stair Climb",
-	9:  "Hiking",
-	10: "Skiing",
-	11: "Snowboarding",
-	12: "Tennis",
-	13: "Basketball",
-	14: "Soccer",
-	15: "Baseball",
-	16: "Football",
-	17: "Golf",
-	18: "Volleyball",
-	19: "Rock Climbing",
-	20: "Other",
-}
-
 func FormatWorkoutData(workouts []models.Workout) WorkoutDisplayData {
 	result := WorkoutDisplayData{
 		HasData: len(workouts) > 0,
@@ -70,10 +47,7 @@ func FormatWorkoutData(workouts []models.Workout) WorkoutDisplayData {
 		}
 
 		row.DurationMins = calcDurationMins(w.Start, w.End)
-		row.SportName = sportIDToName[w.SportID]
-		if row.SportName == "" {
-			row.SportName = "Unknown"
-		}
+		row.SportName = SportName(w.SportID)
 
 		result.Workouts = append(result.Workouts, row)
 	}
@@ -102,13 +76,9 @@ func FormatWorkoutTable(workouts []models.Workout, width int) string {
 		if w.Score != nil {
 			strain = fmt.Sprintf("%.1f", w.Score.Strain)
 		}
-		sport := sportIDToName[w.SportID]
-		if sport == "" {
-			sport = "Unknown"
-		}
 
 		row := fmt.Sprintf("%-6s %-12s %-8d %-6s %s",
-			w.ID, formatDate(w.Start), duration, strain, sport)
+			w.ID, formatDate(w.Start), duration, strain, SportName(w.SportID))
 		rows = append(rows, row)
 	}
 
@@ -147,7 +117,11 @@ func calcDurationMins(start, end string) int {
 		return 0
 	}
 	duration := endTime.Sub(startTime)
-	return int(duration.Minutes())
+	mins := int(duration.Minutes())
+	if mins < 0 {
+		return 0
+	}
+	return mins
 }
 
 func formatDate(s string) string {
@@ -179,6 +153,10 @@ func WorkoutDateRange(days int) (string, string) {
 	return from, to
 }
 
+// SportName returns the WHOOP sport label for an ID, or "Unknown".
 func SportName(sportID int) string {
-	return sportIDToName[sportID]
+	if name, ok := models.SportName[sportID]; ok {
+		return name
+	}
+	return "Unknown"
 }
