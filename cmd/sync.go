@@ -116,7 +116,7 @@ func runSyncOnce(cmd *cobra.Command) error {
 	client := syncNewClient(tokenSource)
 	db, err := syncOpenDB(syncDBPath())
 	if err != nil {
-		return fmt.Errorf("open database: %w\nHint: run 'whooper login' or 'whooper sync' to initialize the database.", err)
+		return fmt.Errorf("open database: %w\nHint: run 'whooper login' or 'whooper sync' to initialize the database", err)
 	}
 	defer db.Close()
 	debugf("database opened db_path=%s", syncDBPath())

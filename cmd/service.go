@@ -44,9 +44,13 @@ Prometheus and Grafana.`,
 
 		handler := newServeHandler(buildServeStatusReport)
 		errCh := make(chan error, 1)
+		addr := serviceAddr
+		listen := serveListenAndServe
+		// Print before starting the listener goroutine so cmd output is not
+		// written concurrently with the sync loop (race detector / shared buffer).
+		fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", addr)
 		go func() {
-			fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", serviceAddr)
-			if err := serveListenAndServe(serviceAddr, handler); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := listen(addr, handler); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTP server error: %w", err)
 			}
 		}()
