@@ -17,7 +17,7 @@ func TestMetricColumn(t *testing.T) {
 		{"hrv", "hrv_rmssd", "recovery", false},
 		{"rhr", "resting_heart_rate", "recovery", false},
 		{"strain", "strain", "cycle", false},
-		{"sleep_duration", "(total_in_bed_time_milli - total_awake_time_milli)", "sleep", false},
+		{"sleep_duration", "(total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0))", "sleep", false},
 		{"sleep_efficiency", "sleep_efficiency_pct", "sleep", false},
 		{"invalid_metric", "", "", true},
 	}

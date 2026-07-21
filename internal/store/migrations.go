@@ -307,6 +307,77 @@ var migrations = []migration{
 			WHERE score_state = 'SCORED'`,
 		},
 	},
+	{
+		version: 5,
+		statements: []string{
+			`DROP VIEW IF EXISTS daily_recovery`,
+			`DROP VIEW IF EXISTS daily_sleep`,
+			`DROP VIEW IF EXISTS daily_strain`,
+			`DROP VIEW IF EXISTS workout_summary`,
+
+			`CREATE VIEW daily_recovery AS
+			SELECT
+				date(created_at) AS day,
+				recovery_score,
+				hrv_rmssd,
+				resting_heart_rate,
+				spo2_percentage,
+				skin_temp_celsius
+			FROM recovery
+			WHERE score_state = 'SCORED'`,
+
+			`CREATE VIEW daily_sleep AS
+			SELECT
+				date(start) AS day,
+				(total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0)) / 3600000.0 AS actual_hours,
+				total_in_bed_time_milli / 3600000.0 AS in_bed_hours,
+				total_awake_time_milli / 3600000.0 AS awake_hours,
+				(baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli) / 3600000.0 AS need_hours,
+				((total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0)) - (baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli)) / 3600000.0 AS need_gap_hours,
+				sleep_efficiency_pct,
+				sleep_performance_pct,
+				sleep_consistency_pct,
+				disturbance_count,
+				sleep_cycle_count,
+				respiratory_rate
+			FROM sleep
+			WHERE nap = 0 AND score_state = 'SCORED'`,
+
+			`CREATE VIEW daily_strain AS
+			SELECT
+				date(start) AS day,
+				strain,
+				kilojoule,
+				average_heart_rate,
+				max_heart_rate
+			FROM cycle
+			WHERE score_state = 'SCORED'`,
+
+			`CREATE VIEW workout_summary AS
+			SELECT
+				id,
+				date(start) AS day,
+				start,
+				end,
+				sport_id,
+				(strftime('%s', end) - strftime('%s', start)) / 60.0 AS duration_minutes,
+				strain,
+				average_heart_rate,
+				max_heart_rate,
+				kilojoule,
+				percent_recorded,
+				distance_meter / 1000.0 AS distance_km,
+				altitude_gain_meter,
+				zone_zero_milli / 60000.0 AS zone_zero_minutes,
+				zone_one_milli / 60000.0 AS zone_one_minutes,
+				zone_two_milli / 60000.0 AS zone_two_minutes,
+				zone_three_milli / 60000.0 AS zone_three_minutes,
+				zone_four_milli / 60000.0 AS zone_four_minutes,
+				zone_five_milli / 60000.0 AS zone_five_minutes
+			FROM workout
+			WHERE score_state = 'SCORED'`,
+		},
+	},
 }
 
 func (db *DB) migrate() error {

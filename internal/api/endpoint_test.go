@@ -44,6 +44,9 @@ func TestGetProfile_Error(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+	if !IsUnauthorized(err) {
+		t.Fatalf("expected unauthorized StatusError, got %v", err)
+	}
 }
 
 func TestGetProfile_DecodeError(t *testing.T) {

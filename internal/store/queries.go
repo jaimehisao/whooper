@@ -75,7 +75,7 @@ func (db *DB) GetRecoveryTrend(from, to string) ([]RecoveryTrendPoint, error) {
 
 func (db *DB) GetSleepTrend(from, to string) ([]SleepTrendPoint, error) {
 	query := `SELECT date(start) AS d,
-		total_in_bed_time_milli - total_awake_time_milli AS duration_milli,
+		total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0) AS duration_milli,
 		sleep_efficiency_pct, sleep_performance_pct, sleep_consistency_pct
 		FROM sleep WHERE nap = 0 AND score_state = 'SCORED'`
 	args := []any{}
@@ -159,27 +159,27 @@ func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, e
 
 	var query string
 	if tableX == tableY {
-		query = fmt.Sprintf(`SELECT %s, %s FROM %s WHERE score_state = 'SCORED'`,
-			colX, colY, tableX)
+		query = fmt.Sprintf(`SELECT %s, %s FROM %s WHERE score_state = 'SCORED'%s`,
+			colX, colY, tableX, scoredSleepFilter(tableX))
 	} else {
 		query = fmt.Sprintf(
 			`WITH a_daily AS (
 				SELECT date(%s) AS d, AVG(%s) AS x
 				FROM %s
-				WHERE score_state = 'SCORED'
+				WHERE score_state = 'SCORED'%s
 				GROUP BY date(%s)
 			),
 			b_daily AS (
 				SELECT date(%s) AS d, AVG(%s) AS y
 				FROM %s
-				WHERE score_state = 'SCORED'
+				WHERE score_state = 'SCORED'%s
 				GROUP BY date(%s)
 			)
 			SELECT a_daily.x, b_daily.y
 			FROM a_daily
 			JOIN b_daily ON a_daily.d = b_daily.d`,
-			dateColumn(tableX), colX, tableX, dateColumn(tableX),
-			dateColumn(tableY), colY, tableY, dateColumn(tableY),
+			dateColumn(tableX), colX, tableX, scoredSleepFilter(tableX), dateColumn(tableX),
+			dateColumn(tableY), colY, tableY, scoredSleepFilter(tableY), dateColumn(tableY),
 		)
 	}
 
@@ -211,12 +211,19 @@ func metricColumn(metric string) (column, table string, err error) {
 	case "strain":
 		return "strain", "cycle", nil
 	case "sleep_duration":
-		return "(total_in_bed_time_milli - total_awake_time_milli)", "sleep", nil
+		return "(total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0))", "sleep", nil
 	case "sleep_efficiency":
 		return "sleep_efficiency_pct", "sleep", nil
 	default:
 		return "", "", fmt.Errorf("unknown metric: %s", metric)
 	}
+}
+
+func scoredSleepFilter(table string) string {
+	if table == "sleep" {
+		return " AND nap = 0"
+	}
+	return ""
 }
 
 func dateColumn(table string) string {

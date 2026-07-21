@@ -1,6 +1,8 @@
 package formatters
 
 import (
+	"fmt"
+
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 )
 
@@ -76,13 +78,5 @@ func CorrelationDescription(xMetric, yMetric string, r float64) string {
 }
 
 func formatFloatSimple(f float64) string {
-	if f < 0 {
-		return "-"
-	}
-	intPart := int(f)
-	fracPart := int((f - float64(intPart)) * 100)
-	if fracPart < 0 {
-		fracPart = -fracPart
-	}
-	return string(rune('0'+byte(intPart))) + "." + string(rune('0'+byte(fracPart/10))) + string(rune('0'+byte(fracPart%10)))
+	return fmt.Sprintf("%.2f", f)
 }

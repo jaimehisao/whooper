@@ -170,6 +170,9 @@ This runs both the periodic sync loop and the HTTP API server in a single
 process. Then point Prometheus at `http://<host>:9464/metrics`. For alert
 examples, see [docs/prometheus-alerts.md](docs/prometheus-alerts.md).
 
+Bind to `127.0.0.1` unless you intentionally expose health data on a private
+network — `/api/*`, `/status`, and `/metrics` are unauthenticated.
+
 The `/api/*` endpoints return JSON from the local SQLite cache. `recovery`,
 `sleep`, `strain`, and `workouts` accept optional query parameters:
 
@@ -188,18 +191,18 @@ If Grafana runs on a different machine, prefer one of these setups:
 | Approach | Tradeoff |
 |----------|----------|
 | Run `whooper` on the Grafana host | Simplest; the SQLite database stays local to Grafana. |
-| Copy `whooper.db` to the Grafana host | Works for batch updates; copy to a temp file and atomically rename to avoid partial reads. |
-| Expose a Whooper HTTP API | Best fit for a service-style bridge; available through `whooper serve`. |
+| Copy `whooper.db` (+ `-wal`/`-shm` if present) to the Grafana host | Works for batch updates; checkpoint or copy siblings together, then atomically rename. |
+| Expose a Whooper HTTP API | Best fit for a service-style bridge; available through `whooper serve` / `whooper service`. |
 | Use a network database | Better for multi-host deployments than sharing SQLite over NFS. |
 
-The planned service-style bridge is:
+Service-style bridge path:
 
 ```text
-Whoop API -> whooper daemon/API -> Prometheus and/or Grafana HTTP datasource
+Whoop API -> whooper service -> Prometheus and/or Grafana HTTP datasource
 ```
 
-That would add richer HTTP endpoints for health records and richer Prometheus
-metrics while keeping SQLite as the durable local cache.
+SQLite remains the durable local cache; Prometheus scrapes current gauges, and
+`/api/*` serves recent records from that cache.
 
 ## Architecture
 

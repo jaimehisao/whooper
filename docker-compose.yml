@@ -8,7 +8,7 @@ services:
       - /bin/sh
       - -c
     command:
-      - whooper sync --loop --interval "$${WHOOPER_SYNC_INTERVAL}" & exec whooper serve --addr 0.0.0.0:9464
+      - exec whooper service --addr 0.0.0.0:9464 --interval "$${WHOOPER_SYNC_INTERVAL}"
     ports:
       - "9464:9464"
     volumes:
@@ -25,7 +25,8 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana-data:/var/lib/grafana
-      - ${WHOOPER_HOME:-${HOME}/.whooper}/whooper.db:/data/whooper.db:ro
+      # Mount the whole data dir so Grafana can see WAL/SHM siblings of whooper.db.
+      - ${WHOOPER_HOME:-${HOME}/.whooper}:/data:ro
     restart: unless-stopped
 
 volumes:

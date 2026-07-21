@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-resty/resty/v2"
@@ -211,7 +212,7 @@ func TestFetchPaginated_CallbackError(t *testing.T) {
 	}
 }
 
-func TestFetchPaginated_RepeatedNextTokenStops(t *testing.T) {
+func TestFetchPaginated_RepeatedNextTokenErrors(t *testing.T) {
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
@@ -228,8 +229,8 @@ func TestFetchPaginated_RepeatedNextTokenStops(t *testing.T) {
 	err := FetchPaginated[testItem](client, "/items", nil, func(records []testItem) error {
 		return nil
 	})
-	if err != nil {
-		t.Fatalf("FetchPaginated error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "repeated next_token") {
+		t.Fatalf("FetchPaginated error = %v, want repeated next_token", err)
 	}
 	if callCount != 2 {
 		t.Fatalf("callCount = %d, want 2", callCount)
@@ -242,6 +243,7 @@ func TestFetchPaginated_Property(t *testing.T) {
 		tokens     []string // tokens to return in sequence
 		wantCalls  int
 		wantItems  int
+		wantErr    bool
 		wantParams map[string]string
 	}{
 		{
@@ -251,10 +253,11 @@ func TestFetchPaginated_Property(t *testing.T) {
 			wantItems: 1,
 		},
 		{
-			name:      "Repeated token stops",
+			name:      "Repeated token errors",
 			tokens:    []string{"a", "a"},
 			wantCalls: 2,
 			wantItems: 2,
+			wantErr:   true,
 		},
 		{
 			name:      "Three page chain",
@@ -319,7 +322,11 @@ func TestFetchPaginated_Property(t *testing.T) {
 				return nil
 			})
 
-			if err != nil {
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected pagination error, got nil")
+				}
+			} else if err != nil {
 				t.Fatalf("FetchPaginated error = %v", err)
 			}
 			if callCount != tt.wantCalls {

@@ -56,6 +56,7 @@ func (s *Syncer) SyncFrom(start string) error {
 
 	var mu sync.Mutex
 	var errs []entityErr
+	var succeeded []string
 	var wg sync.WaitGroup
 
 	syncEntity := func(name string, fn func(string) error) {
@@ -66,7 +67,11 @@ func (s *Syncer) SyncFrom(start string) error {
 				mu.Lock()
 				errs = append(errs, entityErr{name, err})
 				mu.Unlock()
+				return
 			}
+			mu.Lock()
+			succeeded = append(succeeded, name)
+			mu.Unlock()
 		}()
 	}
 
@@ -77,19 +82,22 @@ func (s *Syncer) SyncFrom(start string) error {
 
 	wg.Wait()
 
+	// Advance watermarks for entities that completed so a partial failure does
+	// not force successful entities to re-download forever. The next
+	// incremental start uses the oldest remaining watermark.
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, entity := range succeeded {
+		if err := s.db.SetSyncState(entity, now); err != nil {
+			return fmt.Errorf("save sync state for %s: %w", entity, err)
+		}
+	}
+
 	if len(errs) > 0 {
 		msg := "sync errors:"
 		for _, e := range errs {
 			msg += fmt.Sprintf(" %s: %v;", e.entity, e.err)
 		}
 		return fmt.Errorf("%s", msg)
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	for _, entity := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
-		if err := s.db.SetSyncState(entity, now); err != nil {
-			return fmt.Errorf("save sync state for %s: %w", entity, err)
-		}
 	}
 	return nil
 }
@@ -102,15 +110,29 @@ func GetSyncStartWithOverlap(db interface{ GetSyncState(string) (string, error) 
 	if db == nil {
 		return ""
 	}
-	last, err := db.GetSyncState("cycles")
-	if err != nil || last == "" {
+
+	var oldest time.Time
+	found := false
+	for _, entity := range syncEntities {
+		last, err := db.GetSyncState(entity)
+		if err != nil || last == "" {
+			// Any missing entity watermark means we cannot safely incremental-
+			// sync; fall back to a full fetch window.
+			return ""
+		}
+		t, err := time.Parse(time.RFC3339, last)
+		if err != nil {
+			return ""
+		}
+		if !found || t.Before(oldest) {
+			oldest = t
+			found = true
+		}
+	}
+	if !found {
 		return ""
 	}
-	t, err := time.Parse(time.RFC3339, last)
-	if err != nil {
-		return ""
-	}
-	return t.Add(-24 * time.Hour).Format(time.RFC3339)
+	return oldest.Add(-24 * time.Hour).Format(time.RFC3339)
 }
 
 func FormatSyncTime(t time.Time) string {

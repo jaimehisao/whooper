@@ -85,3 +85,21 @@ test improvements for Whooper.
 - [x] Add GoReleaser configuration for tagged releases, checksums, and packaged binaries.
 - [x] Add an install script or documented `go install` flow with versioned examples.
 - [x] Add release smoke checks that verify the packaged binary starts and reports the expected version.
+
+## 12) Wild-readiness follow-ups (still open)
+
+- [ ] Model optional WHOOP score fields as pointers / SQL NULL instead of zero
+      values so unscored metrics do not pollute averages, alerts, exports, or Grafana.
+- [ ] Thread `context.Context` through CLI → syncer → API client; make
+      `sync --loop` / `service` interruptible and cancel in-flight fetches.
+- [ ] Track incremental sync watermarks from per-entity `max(updated_at)` rather
+      than wall-clock sync completion time (keep overlap as a safety net).
+- [ ] Normalize stored timestamps to RFC3339 UTC and use half-open date bounds
+      for API/export/TUI range filters.
+- [ ] Add optional auth (bearer/basic) for `serve`/`service` when binding
+      non-loopback addresses.
+- [ ] Classify permanent sync failures in loop/service mode (auth/config) and
+      surface them via `/healthz` / metrics instead of looping forever.
+- [ ] Align alert "today" semantics with local health-day boundaries and only
+      evaluate scored current-day records.
+- [ ] Revisit same-table correlation queries so all pairs use daily aggregation.

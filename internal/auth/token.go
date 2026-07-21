@@ -2,19 +2,21 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 
+	"git.infra.hisao.org/hisao/whooper/internal/securefile"
 	"golang.org/x/oauth2"
 )
 
-// SaveToken writes an OAuth2 token to disk as JSON.
+// SaveToken writes an OAuth2 token to disk as JSON with 0600 permissions.
 func SaveToken(path string, token *oauth2.Token) error {
 	data, err := json.MarshalIndent(token, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	return securefile.Write(path, data, 0o600)
 }
 
 // LoadToken reads an OAuth2 token from a JSON file on disk.
@@ -54,12 +56,15 @@ func (p *persistingTokenSource) Token() (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	// Only save when the token has actually been refreshed
+	// Only save when the token has actually been refreshed.
 	if token.AccessToken != p.lastAccess {
 		p.lastAccess = token.AccessToken
-		// We ignore save errors during refresh - it's better to have a fresh
-		// token in memory than to fail because disk is full or read-only.
-		_ = SaveToken(p.path, token)
+		// Still return the refreshed token so the current request can proceed,
+		// but surface persistence failures — a lost refresh token bricks auth
+		// after restart when WHOOP rotates refresh tokens.
+		if err := SaveToken(p.path, token); err != nil {
+			fmt.Fprintf(os.Stderr, "whooper: warning: failed to persist refreshed OAuth token to %s: %v\n", p.path, err)
+		}
 	}
 	return token, nil
 }

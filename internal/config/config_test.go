@@ -47,6 +47,39 @@ func TestSavePermissions(t *testing.T) {
 	}
 }
 
+func TestSaveTightensExistingLoosePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping permission check on Windows")
+	}
+
+	tmpDir := filepath.Join(t.TempDir(), "configdir")
+	if err := os.MkdirAll(tmpDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("client_id: old\n"), 0o644); err != nil {
+		t.Fatalf("seed WriteFile: %v", err)
+	}
+
+	origDir := dirFunc
+	origPath := pathFunc
+	dirFunc = func() string { return tmpDir }
+	pathFunc = func() string { return cfgPath }
+	defer func() { dirFunc = origDir; pathFunc = origPath }()
+
+	if err := Save(&Config{ClientID: "new"}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	info, err := os.Stat(cfgPath)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Fatalf("mode = %o, want 0600", mode)
+	}
+}
+
 func TestDir(t *testing.T) {
 
 	home, err := os.UserHomeDir()
