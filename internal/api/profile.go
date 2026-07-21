@@ -14,7 +14,11 @@ func (c *Client) GetProfile() (*models.Profile, error) {
 		return nil, fmt.Errorf("get profile: %w", err)
 	}
 	if resp.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("get profile: status %d: %s", resp.StatusCode(), resp.String())
+		return nil, &StatusError{
+			Endpoint: "/v2/user/profile/basic",
+			Status:   resp.StatusCode(),
+			Body:     resp.String(),
+		}
 	}
 	var p models.Profile
 	if err := json.Unmarshal(resp.Body(), &p); err != nil {

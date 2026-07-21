@@ -21,6 +21,9 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SQLite allows only one writer. Cap the pool so parallel sync goroutines
+	// serialize on the same connection instead of racing to lock timeouts.
+	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, err

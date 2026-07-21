@@ -114,8 +114,10 @@ func TestSyncFromUsesOverlapStartForIncrementalSync(t *testing.T) {
 	defer server.Close()
 
 	db := newSyncTestDB(t)
-	if err := db.SetSyncState("cycles", "2024-01-15T00:00:00Z"); err != nil {
-		t.Fatalf("SetSyncState error = %v", err)
+	for _, entity := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
+		if err := db.SetSyncState(entity, "2024-01-15T00:00:00Z"); err != nil {
+			t.Fatalf("SetSyncState(%s) error = %v", entity, err)
+		}
 	}
 
 	s := New(newSyncTestClient(server.URL), db, nil)
@@ -160,10 +162,18 @@ func TestSyncFromAggregatesEntityErrors(t *testing.T) {
 
 	got, stateErr := db.GetSyncState("cycles")
 	if stateErr != nil {
-		t.Fatalf("GetSyncState error = %v", stateErr)
+		t.Fatalf("GetSyncState(cycles) error = %v", stateErr)
 	}
-	if got != "" {
-		t.Fatalf("sync state should remain empty on aggregate failure, got %q", got)
+	if got == "" {
+		t.Fatal("successful entity sync state should advance even when another entity fails")
+	}
+
+	recoveryState, stateErr := db.GetSyncState("recoveries")
+	if stateErr != nil {
+		t.Fatalf("GetSyncState(recoveries) error = %v", stateErr)
+	}
+	if recoveryState != "" {
+		t.Fatalf("failed entity sync state should remain empty, got %q", recoveryState)
 	}
 }
 

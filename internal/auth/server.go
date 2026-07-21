@@ -111,15 +111,15 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request, state, verifier
 	}
 
 	if r.URL.Query().Get("state") != state {
+		// Do not abort the login flow: scanners, prefetchers, or stale tabs
+		// can hit the callback with junk. Keep waiting for the real redirect.
 		http.Error(w, "invalid state parameter", http.StatusBadRequest)
-		sendOAuthResult(ch, oauthResult{err: errors.New("state mismatch")})
 		return
 	}
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "missing code parameter", http.StatusBadRequest)
-		sendOAuthResult(ch, oauthResult{err: errors.New("missing authorization code")})
 		return
 	}
 

@@ -70,10 +70,13 @@ func FetchPaginated[T any](c *Client, endpoint string, params map[string]string,
 			}
 		}
 
-		if pr.NextToken == "" || pr.NextToken == nextToken {
-			break
+		if pr.NextToken == "" {
+			return nil
+		}
+		if pr.NextToken == nextToken {
+			return fmt.Errorf("fetch %s: pagination stuck on repeated next_token", endpoint)
 		}
 		nextToken = pr.NextToken
 	}
-	return nil
+	return fmt.Errorf("fetch %s: exceeded pagination safety limit of %d pages", endpoint, maxPages)
 }

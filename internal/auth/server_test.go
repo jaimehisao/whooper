@@ -103,8 +103,10 @@ func TestHandleOAuthCallbackStateMismatch(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 	}
-	if got := (<-ch).err; got == nil || got.Error() != "state mismatch" {
-		t.Fatalf("unexpected channel error: %v", got)
+	select {
+	case res := <-ch:
+		t.Fatalf("invalid state should not abort the flow, got %#v", res)
+	default:
 	}
 }
 
@@ -121,8 +123,10 @@ func TestHandleOAuthCallbackMissingCode(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 	}
-	if got := (<-ch).err; got == nil || got.Error() != "missing authorization code" {
-		t.Fatalf("unexpected channel error: %v", got)
+	select {
+	case res := <-ch:
+		t.Fatalf("missing code should not abort the flow, got %#v", res)
+	default:
 	}
 }
 
@@ -201,10 +205,6 @@ func TestHandleOAuthCallbackRepeatedMismatchedState(t *testing.T) {
 	if rr1.Code != http.StatusBadRequest {
 		t.Fatalf("first status = %d, want %d", rr1.Code, http.StatusBadRequest)
 	}
-	res1 := <-ch
-	if res1.err == nil || res1.err.Error() != "state mismatch" {
-		t.Fatalf("first result error = %v, want state mismatch", res1.err)
-	}
 
 	// Second callback: mismatched state again
 	req2 := httptest.NewRequest(http.MethodGet, "/callback?state=wrong2&code=abc", nil)
@@ -216,6 +216,12 @@ func TestHandleOAuthCallbackRepeatedMismatchedState(t *testing.T) {
 
 	if rr2.Code != http.StatusBadRequest {
 		t.Fatalf("second status = %d, want %d", rr2.Code, http.StatusBadRequest)
+	}
+
+	select {
+	case res := <-ch:
+		t.Fatalf("mismatched state should keep waiting, got %#v", res)
+	default:
 	}
 }
 
@@ -255,9 +261,10 @@ func TestHandleOAuthCallbackInvalidThenValid(t *testing.T) {
 	if rr1.Code != http.StatusBadRequest {
 		t.Fatalf("first status = %d, want %d", rr1.Code, http.StatusBadRequest)
 	}
-	res1 := <-ch
-	if res1.err == nil || res1.err.Error() != "missing authorization code" {
-		t.Fatalf("first result error = %v, want missing authorization code", res1.err)
+	select {
+	case res := <-ch:
+		t.Fatalf("invalid callback should keep waiting, got %#v", res)
+	default:
 	}
 
 	// Second callback: valid
@@ -289,24 +296,27 @@ func TestHandleOAuthCallbackMalformedQueries(t *testing.T) {
 		query      string
 		wantStatus int
 		wantErr    string
+		wantAbort  bool
 	}{
 		{
 			name:       "missing both",
 			query:      "",
 			wantStatus: http.StatusBadRequest,
-			wantErr:    "state mismatch", // It checks state first
+			wantAbort:  false,
 		},
 		{
 			name:       "duplicate code",
 			query:      "state=expected&code=abc&code=def",
 			wantStatus: http.StatusOK,
 			wantErr:    "",
+			wantAbort:  false,
 		},
 		{
 			name:       "unexpected params",
 			query:      "state=expected&code=abc&foo=bar",
 			wantStatus: http.StatusOK,
 			wantErr:    "",
+			wantAbort:  false,
 		},
 	}
 
@@ -317,7 +327,7 @@ func TestHandleOAuthCallbackMalformedQueries(t *testing.T) {
 			rr := httptest.NewRecorder()
 
 			handleOAuthCallback(rr, req, state, verifier, func(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
-				if tt.wantErr != "" {
+				if tt.wantStatus != http.StatusOK {
 					t.Fatal("exchange should not be called")
 				}
 				return &oauth2.Token{AccessToken: "abc"}, nil
@@ -326,11 +336,17 @@ func TestHandleOAuthCallbackMalformedQueries(t *testing.T) {
 			if rr.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", rr.Code, tt.wantStatus)
 			}
-			if tt.wantErr != "" {
-				res := <-ch
-				if res.err == nil || !strings.Contains(res.err.Error(), tt.wantErr) {
-					t.Fatalf("error = %v, want %s", res.err, tt.wantErr)
+			if tt.wantStatus != http.StatusOK {
+				select {
+				case res := <-ch:
+					t.Fatalf("invalid callback should not abort, got %#v", res)
+				default:
 				}
+				return
+			}
+			res := <-ch
+			if res.err != nil {
+				t.Fatalf("error = %v, want nil", res.err)
 			}
 		})
 	}

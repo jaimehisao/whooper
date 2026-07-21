@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"git.infra.hisao.org/hisao/whooper/internal/securefile"
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,7 +61,9 @@ func SetTestPaths(dir, cfgPath, dbPath string) {
 	dbPathFunc = func() string { return dbPath }
 }
 
-const defaultRedirectURL = "http://localhost:8484/callback"
+// Prefer 127.0.0.1 over localhost so the OAuth callback matches the IPv4
+// listener and is not broken by hosts that resolve localhost to ::1 first.
+const defaultRedirectURL = "http://127.0.0.1:8484/callback"
 const defaultLowRecovery = 33.0
 const defaultHighStrain = 18.0
 const defaultAlertsEnabled = true
@@ -98,5 +101,5 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(Path(), data, 0o600)
+	return securefile.Write(Path(), data, 0o600)
 }

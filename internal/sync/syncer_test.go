@@ -89,13 +89,26 @@ func TestGetSyncStartWithOverlapError(t *testing.T) {
 	}
 }
 
-func TestGetSyncStartWithOverlapValid(t *testing.T) {
-	db := &mockDBForSync{syncState: "2024-01-15T00:00:00Z"}
+func TestGetSyncStartWithOverlapUsesOldestEntity(t *testing.T) {
+	db := &mockDBForSyncMap{states: map[string]string{
+		"cycles":     "2024-01-20T00:00:00Z",
+		"recoveries": "2024-01-10T00:00:00Z",
+		"sleeps":     "2024-01-18T00:00:00Z",
+		"workouts":   "2024-01-19T00:00:00Z",
+	}}
 	result := GetSyncStartWithOverlap(db)
-	expected := "2024-01-14T00:00:00Z"
+	expected := "2024-01-09T00:00:00Z"
 	if result != expected {
 		t.Errorf("GetSyncStartWithOverlap() = %q, want %q", result, expected)
 	}
+}
+
+type mockDBForSyncMap struct {
+	states map[string]string
+}
+
+func (m *mockDBForSyncMap) GetSyncState(entity string) (string, error) {
+	return m.states[entity], nil
 }
 
 func TestGetSyncStartWithOverlapInvalidTime(t *testing.T) {
