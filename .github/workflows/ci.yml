@@ -19,6 +19,8 @@ jobs:
   test:
     name: Test
     runs-on: apps-runner
+    # Avoid running untrusted fork PR code on self-hosted infrastructure.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,6 +58,7 @@ jobs:
   lint:
     name: Lint
     runs-on: apps-runner
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       pull-requests: read
@@ -91,6 +94,7 @@ jobs:
   build:
     name: Build
     runs-on: apps-runner
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,6 +110,7 @@ jobs:
   smoke:
     name: Smoke
     runs-on: apps-runner
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: [build]
     steps:
       - name: Checkout
