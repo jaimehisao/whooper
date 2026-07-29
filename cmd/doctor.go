@@ -47,8 +47,10 @@ func defaultDoctorDeps() doctorDeps {
 		validateRedirect: auth.ValidateRedirectURL,
 		loadToken:        auth.LoadToken,
 		tokenPath:        config.TokenPath,
+		// Writable open validates that the DB path is creatable/migratable.
+		// Read-only would fail on first-run smoke before any sync has created the file.
 		openDB: func(path string) (doctorDB, error) {
-			return store.OpenReadOnly(path)
+			return store.Open(path)
 		},
 		dbPath: config.DBPath,
 		apiCheck: func(cfg *config.Config, token *oauth2.Token) error {

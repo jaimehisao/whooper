@@ -2,8 +2,10 @@ package remote
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -77,6 +79,90 @@ func TestGetJSONUnreachable(t *testing.T) {
 	var re *Error
 	if !asError(err, &re) || re.Kind != KindUnreachable {
 		t.Fatalf("got %v, want unreachable", err)
+	}
+}
+
+func TestGetJSONEmptyBaseURL(t *testing.T) {
+	c := New("", "")
+	err := c.GetJSON("/x", nil, nil)
+	var re *Error
+	if !asError(err, &re) || re.Kind != KindUnreachable {
+		t.Fatalf("got %v, want unreachable empty URL", err)
+	}
+}
+
+func TestGetJSONInvalidBaseURL(t *testing.T) {
+	c := New("not-a-url", "")
+	err := c.GetJSON("/x", nil, nil)
+	var re *Error
+	if !asError(err, &re) || re.Kind != KindUnreachable {
+		t.Fatalf("got %v, want unreachable invalid URL", err)
+	}
+}
+
+func TestGetJSONHTTPErrorAndDecode(t *testing.T) {
+	t.Run("http_500", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+		c := New(srv.URL, "t")
+		err := c.GetJSON("/x", nil, &map[string]any{})
+		var re *Error
+		if !asError(err, &re) || re.Kind != KindHTTP || re.StatusCode != 500 {
+			t.Fatalf("got %#v", err)
+		}
+	})
+	t.Run("bad_json", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("not-json"))
+		}))
+		defer srv.Close()
+		c := New(srv.URL, "")
+		err := c.GetJSON("/x", nil, &map[string]any{})
+		var re *Error
+		if !asError(err, &re) || re.Kind != KindDecode {
+			t.Fatalf("got %#v", err)
+		}
+	})
+	t.Run("query_params", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("from") != "2024-01-01" {
+				t.Fatalf("query = %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode([]any{})
+		}))
+		defer srv.Close()
+		c := New(srv.URL, "")
+		q := url.Values{"from": {"2024-01-01"}}
+		var dest []any
+		if err := c.GetJSON("/api/recovery", q, &dest); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("nil_dest_ok", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}))
+		defer srv.Close()
+		c := New(srv.URL, "")
+		if err := c.GetJSON("/x", nil, nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestErrorUnwrapAndFormat(t *testing.T) {
+	inner := errors.New("dial")
+	e := &Error{Kind: KindUnreachable, Message: "remote backend unreachable", Err: inner}
+	if e.Error() == "" || e.Unwrap() != inner {
+		t.Fatalf("unwrap/format failed: %v", e)
+	}
+	e2 := &Error{Kind: KindHTTP, Message: "no wrap"}
+	if !strings.Contains(e2.Error(), "http_error") {
+		t.Fatalf("error = %s", e2.Error())
 	}
 }
 

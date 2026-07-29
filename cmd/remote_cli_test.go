@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"git.infra.hisao.org/hisao/whooper/internal/models"
+	"git.infra.hisao.org/hisao/whooper/internal/remote"
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 )
 
@@ -509,6 +511,88 @@ func TestRemoteEnvOverridesFileConfig(t *testing.T) {
 	}
 	if parsed.LatestHealth == nil || parsed.LatestHealth.Values["recovery_score"] != 88 {
 		t.Fatalf("expected recovery 88, got %#v\n%s", parsed.LatestHealth, buf.String())
+	}
+}
+
+func TestRemoteExportCSVAndWriteOutput(t *testing.T) {
+	_, _ = startRemoteBackend(t, remoteTestToken)
+	prevEntity, prevFormat := exportEntity, exportFormat
+	prevFrom, prevTo, prevOut := exportFrom, exportTo, exportOutput
+	exportEntity = "recoveries"
+	exportFormat = "csv"
+	exportFrom, exportTo, exportOutput = "", "", ""
+	t.Cleanup(func() {
+		exportEntity, exportFormat = prevEntity, prevFormat
+		exportFrom, exportTo, exportOutput = prevFrom, prevTo, prevOut
+	})
+	var buf bytes.Buffer
+	exportCmd.SetOut(&buf)
+	exportCmd.SetErr(&buf)
+	t.Cleanup(func() { exportCmd.SetOut(nil); exportCmd.SetErr(nil) })
+	if err := exportCmd.RunE(exportCmd, nil); err != nil {
+		t.Fatalf("csv export: %v\n%s", err, buf.String())
+	}
+	if !strings.Contains(buf.String(), "recovery_score") {
+		t.Fatalf("csv missing recovery_score: %s", buf.String())
+	}
+
+	// unknown format via writeExportOutput
+	exportFormat = "xml"
+	if err := writeExportOutput(exportCmd, []map[string]any{}, "recoveries"); err == nil {
+		t.Fatal("expected unknown format error")
+	}
+	exportFormat = "csv"
+}
+
+func TestEntityAPIPathAndHelpers(t *testing.T) {
+	cases := map[string]string{
+		"recoveries": "/api/recovery",
+		"sleeps":     "/api/sleep",
+		"cycles":     "/api/strain",
+		"strain":     "/api/strain",
+		"workouts":   "/api/workouts",
+	}
+	for ent, want := range cases {
+		got, err := entityAPIPath(ent)
+		if err != nil || got != want {
+			t.Fatalf("entityAPIPath(%q)=%q %v, want %q", ent, got, err, want)
+		}
+	}
+	if _, err := entityAPIPath("nope"); err == nil {
+		t.Fatal("expected unknown entity error")
+	}
+	if maskSecret("") != "" || maskSecret("ab") != "****" || !strings.HasPrefix(maskSecret("supersecret"), "****") {
+		t.Fatalf("maskSecret behavior unexpected")
+	}
+	if !strings.Contains(remoteLocalOnlyHint("whooper sync"), "WHOOPER_REMOTE_URL") {
+		t.Fatal("expected remote local-only hint")
+	}
+	q := remoteQuery("2024-01-01", "2024-01-31", 10)
+	if q.Get("from") != "2024-01-01" || q.Get("to") != "2024-01-31" || q.Get("limit") != "10" {
+		t.Fatalf("remoteQuery = %v", q)
+	}
+}
+
+func TestFormatRemoteErrorKinds(t *testing.T) {
+	for _, tc := range []struct {
+		kind string
+		want string
+	}{
+		{remote.KindMissingToken, "missing_token"},
+		{remote.KindUnauthorized, "unauthorized"},
+		{remote.KindUnreachable, "unreachable"},
+		{remote.KindHTTP, "http_error"},
+	} {
+		err := formatRemoteError(&remote.Error{Kind: tc.kind, Message: "msg"})
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("kind %s: %v", tc.kind, err)
+		}
+	}
+	if formatRemoteError(nil) != nil {
+		t.Fatal("nil should stay nil")
+	}
+	if err := formatRemoteError(errors.New("other")); err == nil || !strings.Contains(err.Error(), "remote:") {
+		t.Fatalf("generic: %v", err)
 	}
 }
 

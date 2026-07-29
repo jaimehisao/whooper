@@ -199,6 +199,28 @@ func TestExportCommandDateFiltering(t *testing.T) {
 	})
 }
 
+func TestWriteCSVMaps(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []map[string]any{
+		{"day": "2024-06-01", "recovery_score": 88.0},
+		{"day": "2024-06-02", "recovery_score": 70.0},
+	}
+	if err := writeCSVMaps(&buf, rows); err != nil {
+		t.Fatalf("writeCSVMaps: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "day") || !strings.Contains(out, "recovery_score") {
+		t.Fatalf("missing headers: %s", out)
+	}
+	if !strings.Contains(out, "2024-06-01") || !strings.Contains(out, "88") {
+		t.Fatalf("missing values: %s", out)
+	}
+	var empty bytes.Buffer
+	if err := writeCSVMaps(&empty, nil); err != nil {
+		t.Fatalf("empty maps: %v", err)
+	}
+}
+
 func TestWriteCSVRecoveries(t *testing.T) {
 	var buf bytes.Buffer
 	data := []models.Recovery{
