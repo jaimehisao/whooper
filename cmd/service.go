@@ -52,9 +52,12 @@ Non-loopback binds require --allow-remote and --token (or WHOOPER_SERVE_TOKEN).`
 		handler := bearerAuthMiddleware(token, newServeHandler(buildServeStatusReport))
 		errCh := make(chan error, 1)
 		ready := make(chan struct{})
+		// Capture locals so the listen goroutine does not race with test teardown
+		// that swaps package-level serveListenAndServe / serviceAddr.
+		addr := serviceAddr
+		listen := serveListenAndServe
 		go func() {
-			err := serveListenAndServe(serviceAddr, handler, func() {
-				cmdFprintf(cmd, "Listening on http://%s\n", serviceAddr)
+			err := listen(addr, handler, func() {
 				close(ready)
 			})
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -64,6 +67,9 @@ Non-loopback binds require --allow-remote and --token (or WHOOPER_SERVE_TOKEN).`
 
 		select {
 		case <-ready:
+			// Print from the main goroutine so we do not race with sync progress
+			// writes to the same command stdout (bytes.Buffer in tests).
+			cmdFprintf(cmd, "Listening on http://%s\n", addr)
 		case err := <-errCh:
 			return err
 		}

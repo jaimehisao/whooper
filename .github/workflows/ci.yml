@@ -58,6 +58,7 @@ jobs:
   lint:
     name: Lint
     runs-on: apps-runner
+    # Avoid running untrusted fork PR code on self-hosted infrastructure.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
@@ -94,6 +95,7 @@ jobs:
   build:
     name: Build
     runs-on: apps-runner
+    # Avoid running untrusted fork PR code on self-hosted infrastructure.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout
@@ -110,6 +112,7 @@ jobs:
   smoke:
     name: Smoke
     runs-on: apps-runner
+    # Avoid running untrusted fork PR code on self-hosted infrastructure.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: [build]
     steps:
