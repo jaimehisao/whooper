@@ -6,10 +6,10 @@ on:
   pull_request:
     branches: [main]
 
-# Build the container image via a remote BuildKit endpoint so the apps-runner
-# does not need a local Docker socket. Images are never pushed from PRs.
-#
-# BUILDKIT_ENDPOINT is injected on apps-runner (no repo secret required).
+# Build the container image via remote Buildx so the apps-runner does not need
+# a local Docker socket. The remote builder endpoint is already configured on
+# the runner — do not set endpoint here.
+# Images are never pushed from PRs.
 
 env:
   REGISTRY: ghcr.io
@@ -38,22 +38,10 @@ jobs:
           echo "tag_sha=${image}:sha-${{ github.sha }}" >> "$GITHUB_OUTPUT"
           echo "tag_latest=${image}:latest" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve remote BuildKit endpoint
-        id: buildkit
-        run: |
-          set -euo pipefail
-          # Endpoint is injected on the runner (not a repo secret).
-          if [ -z "${BUILDKIT_ENDPOINT:-}" ]; then
-            echo "BUILDKIT_ENDPOINT is not set in the runner environment"
-            exit 1
-          fi
-          echo "endpoint=${BUILDKIT_ENDPOINT}" >> "$GITHUB_OUTPUT"
-
       - name: Set up Docker Buildx (remote driver)
         uses: docker/setup-buildx-action@v3
         with:
           driver: remote
-          endpoint: ${{ steps.buildkit.outputs.endpoint }}
 
       - name: Log in to GHCR
         # Login only when we will push (never on pull_request).
