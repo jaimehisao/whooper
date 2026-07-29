@@ -11,10 +11,23 @@ func (db *DB) SaveCycles(cycles []models.Cycle) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO cycle
-		(id, user_id, created_at, updated_at, start, end, days, score_state,
+	stmt, err := tx.Prepare(`INSERT INTO cycle
+		(id, user_id, created_at, updated_at, start, end, timezone_offset, days, score_state,
 		 strain, kilojoule, average_heart_rate, max_heart_rate)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			user_id = excluded.user_id,
+			created_at = excluded.created_at,
+			updated_at = excluded.updated_at,
+			start = excluded.start,
+			end = excluded.end,
+			timezone_offset = excluded.timezone_offset,
+			days = excluded.days,
+			score_state = excluded.score_state,
+			strain = CASE WHEN ? THEN excluded.strain ELSE cycle.strain END,
+			kilojoule = CASE WHEN ? THEN excluded.kilojoule ELSE cycle.kilojoule END,
+			average_heart_rate = CASE WHEN ? THEN excluded.average_heart_rate ELSE cycle.average_heart_rate END,
+			max_heart_rate = CASE WHEN ? THEN excluded.max_heart_rate ELSE cycle.max_heart_rate END`)
 	if err != nil {
 		return err
 	}
@@ -23,15 +36,18 @@ func (db *DB) SaveCycles(cycles []models.Cycle) error {
 	for _, c := range cycles {
 		var strain, kj float64
 		var avgHR, maxHR int
-		if c.Score != nil {
+		hasScore := c.Score != nil
+		if hasScore {
 			strain = c.Score.Strain
 			kj = c.Score.Kilojoule
 			avgHR = c.Score.AverageHeartRate
 			maxHR = c.Score.MaxHeartRate
 		}
+		hs := boolToInt(hasScore)
 		if _, err := stmt.Exec(
-			c.ID, c.UserID, c.CreatedAt, c.UpdatedAt, c.Start, c.End, c.Days, c.ScoreState,
+			c.ID, c.UserID, c.CreatedAt, c.UpdatedAt, c.Start, c.End, c.TimezoneOffset, c.Days, c.ScoreState,
 			strain, kj, avgHR, maxHR,
+			hs, hs, hs, hs,
 		); err != nil {
 			return err
 		}
@@ -40,17 +56,13 @@ func (db *DB) SaveCycles(cycles []models.Cycle) error {
 }
 
 func (db *DB) ListCycles(from, to string) ([]models.Cycle, error) {
-	query := `SELECT id, user_id, created_at, updated_at, start, end, days, score_state,
+	query := `SELECT id, user_id, created_at, updated_at, start, end, timezone_offset, days, score_state,
 		strain, kilojoule, average_heart_rate, max_heart_rate FROM cycle WHERE 1=1`
 	args := []any{}
-
-	if from != "" {
-		query += ` AND start >= ?`
-		args = append(args, from)
-	}
-	if to != "" {
-		query += ` AND start <= ?`
-		args = append(args, to)
+	var err error
+	query, args, err = appendListBounds(query, args, "start", from, to)
+	if err != nil {
+		return nil, err
 	}
 	query += ` ORDER BY start DESC`
 
@@ -70,18 +82,27 @@ func (db *DB) ListCycles(from, to string) ([]models.Cycle, error) {
 		var strain, kj float64
 		var avgHR, maxHR int
 		if err := rows.Scan(
-			&c.ID, &c.UserID, &c.CreatedAt, &c.UpdatedAt, &c.Start, &c.End, &c.Days, &c.ScoreState,
+			&c.ID, &c.UserID, &c.CreatedAt, &c.UpdatedAt, &c.Start, &c.End, &c.TimezoneOffset, &c.Days, &c.ScoreState,
 			&strain, &kj, &avgHR, &maxHR,
 		); err != nil {
 			return nil, err
 		}
-		c.Score = &models.CycleScore{
-			Strain:           strain,
-			Kilojoule:        kj,
-			AverageHeartRate: avgHR,
-			MaxHeartRate:     maxHR,
+		if c.ScoreState == "SCORED" {
+			c.Score = &models.CycleScore{
+				Strain:           strain,
+				Kilojoule:        kj,
+				AverageHeartRate: avgHR,
+				MaxHeartRate:     maxHR,
+			}
 		}
 		cycles = append(cycles, c)
 	}
 	return cycles, rows.Err()
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

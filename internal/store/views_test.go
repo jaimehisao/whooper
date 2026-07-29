@@ -35,7 +35,7 @@ func TestViewShapes(t *testing.T) {
 			ScoreState: "SCORED",
 			Score: &models.WorkoutScore{
 				Strain:        10.5,
-				DistanceMeter: 5000,
+				DistanceMeter: models.FloatPtr(5000),
 			},
 		},
 	})

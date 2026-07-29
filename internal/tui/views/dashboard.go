@@ -8,6 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"git.infra.hisao.org/hisao/whooper/internal/analysis"
+	"git.infra.hisao.org/hisao/whooper/internal/config"
 	"git.infra.hisao.org/hisao/whooper/internal/models"
 	"git.infra.hisao.org/hisao/whooper/internal/store"
 	"git.infra.hisao.org/hisao/whooper/internal/tui"
@@ -123,12 +125,18 @@ func (m *DashboardModel) Refresh() tea.Cmd {
 		}
 		msg.workouts = workouts
 
-		// Generate alerts from today's data
-		if msg.recovery > 0 && msg.recovery < 33 {
-			msg.alerts = append(msg.alerts, fmt.Sprintf("Low recovery: %.0f%%", msg.recovery))
-		}
-		if msg.strain > 18 {
-			msg.alerts = append(msg.alerts, fmt.Sprintf("High strain: %.1f", msg.strain))
+		// Generate alerts from configured thresholds when possible.
+		if cfg, cfgErr := config.Load(); cfgErr == nil {
+			for _, a := range analysis.CheckAlerts(db, cfg) {
+				msg.alerts = append(msg.alerts, a.Message)
+			}
+		} else {
+			if msg.recovery > 0 && msg.recovery < 33 {
+				msg.alerts = append(msg.alerts, fmt.Sprintf("Low recovery: %.0f%%", msg.recovery))
+			}
+			if msg.strain > 18 {
+				msg.alerts = append(msg.alerts, fmt.Sprintf("High strain: %.1f", msg.strain))
+			}
 		}
 
 		if len(errs) > 0 {

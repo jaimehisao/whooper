@@ -116,8 +116,8 @@ func TestWorkoutsModel_SummaryBreakdownAndDetail(t *testing.T) {
 				MaxHeartRate:      180,
 				Kilojoule:         1000,
 				PercentRecorded:   98,
-				DistanceMeter:     8000,
-				AltitudeGainMeter: 120,
+				DistanceMeter: models.FloatPtr(8000),
+				AltitudeGainMeter: models.FloatPtr(120),
 			},
 		},
 		{
@@ -127,7 +127,7 @@ func TestWorkoutsModel_SummaryBreakdownAndDetail(t *testing.T) {
 				Strain:           9,
 				AverageHeartRate: 130,
 				MaxHeartRate:     165,
-				DistanceMeter:    22000,
+				DistanceMeter: models.FloatPtr(22000),
 			},
 		},
 	}); err != nil {

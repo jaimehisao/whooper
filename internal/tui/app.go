@@ -131,14 +131,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if newTab >= 0 && newTab != a.activeTab {
 			a.activeTab = newTab
-			if v, ok := a.views[a.activeTab].(interface{ Refresh() tea.Cmd }); ok {
-				return a, v.Refresh()
-			}
+			// Do not force Refresh on tab switch; views keep Init/sync-loaded data.
 			return a, nil
 		}
 	}
 
-	// Pass to active view
+	// Pass non-key messages to all views so background loads aren't dropped.
+	if _, isKey := msg.(tea.KeyMsg); !isKey {
+		var cmds []tea.Cmd
+		for i, v := range a.views {
+			if v != nil {
+				var cmd tea.Cmd
+				a.views[i], cmd = v.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+		return a, tea.Batch(cmds...)
+	}
+
+	// Key messages go only to the active view.
 	if a.views[a.activeTab] != nil {
 		var cmd tea.Cmd
 		a.views[a.activeTab], cmd = a.views[a.activeTab].Update(msg)

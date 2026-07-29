@@ -92,7 +92,7 @@ func TestGetSyncStartWithOverlapError(t *testing.T) {
 func TestGetSyncStartWithOverlapValid(t *testing.T) {
 	db := &mockDBForSync{syncState: "2024-01-15T00:00:00Z"}
 	result := GetSyncStartWithOverlap(db)
-	expected := "2024-01-14T00:00:00Z"
+	expected := "2024-01-01T00:00:00Z" // 14-day overlap
 	if result != expected {
 		t.Errorf("GetSyncStartWithOverlap() = %q, want %q", result, expected)
 	}

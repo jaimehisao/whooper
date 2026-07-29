@@ -170,8 +170,8 @@ func TestSaveRecoveries_ListRecoveries(t *testing.T) {
 				RecoveryScore:    78.5,
 				RestingHeartRate: 52.0,
 				HRVRmssd:         45.2,
-				SpO2Percentage:   97.0,
-				SkinTempCelsius:  33.5,
+				SpO2Percentage: models.FloatPtr(97.0),
+				SkinTempCelsius: models.FloatPtr(33.5),
 			},
 		},
 		{
@@ -183,8 +183,8 @@ func TestSaveRecoveries_ListRecoveries(t *testing.T) {
 				RecoveryScore:    65.0,
 				RestingHeartRate: 55.0,
 				HRVRmssd:         38.7,
-				SpO2Percentage:   96.0,
-				SkinTempCelsius:  33.8,
+				SpO2Percentage: models.FloatPtr(96.0),
+				SkinTempCelsius: models.FloatPtr(33.8),
 			},
 		},
 	}
@@ -296,9 +296,9 @@ func TestSaveWorkouts_ListWorkouts(t *testing.T) {
 				MaxHeartRate:        175,
 				Kilojoule:           1200,
 				PercentRecorded:     100.0,
-				DistanceMeter:       5000,
-				AltitudeGainMeter:   50.0,
-				AltitudeChangeMeter: 10.0,
+				DistanceMeter: models.FloatPtr(5000),
+				AltitudeGainMeter: models.FloatPtr(50.0),
+				AltitudeChangeMeter: models.FloatPtr(10.0),
 				ZoneDuration: &models.ZoneDuration{
 					ZoneZeroMilli:  60000,
 					ZoneOneMilli:   300000,
@@ -453,7 +453,7 @@ func TestGetCorrelationData(t *testing.T) {
 	}
 
 	// Both metrics from same table
-	points, err := db.GetCorrelationData("recovery", "hrv")
+	points, err := db.GetCorrelationDataSince("recovery", "hrv", 0)
 	if err != nil {
 		t.Fatalf("GetCorrelationData: %v", err)
 	}

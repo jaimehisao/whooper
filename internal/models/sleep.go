@@ -1,15 +1,16 @@
 package models
 
 type Sleep struct {
-	ID         string      `json:"id"`
-	UserID     int         `json:"user_id"`
-	CreatedAt  string      `json:"created_at"`
-	UpdatedAt  string      `json:"updated_at"`
-	Start      string      `json:"start"`
-	End        string      `json:"end"`
-	Nap        bool        `json:"nap"`
-	ScoreState string      `json:"score_state"`
-	Score      *SleepScore `json:"score"`
+	ID             string      `json:"id"`
+	UserID         int         `json:"user_id"`
+	CreatedAt      string      `json:"created_at"`
+	UpdatedAt      string      `json:"updated_at"`
+	Start          string      `json:"start"`
+	End            string      `json:"end"`
+	TimezoneOffset string      `json:"timezone_offset"`
+	Nap            bool        `json:"nap"`
+	ScoreState     string      `json:"score_state"`
+	Score          *SleepScore `json:"score"`
 }
 
 type SleepScore struct {

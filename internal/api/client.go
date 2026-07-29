@@ -14,10 +14,12 @@ const baseURL = "https://api.prod.whoop.com/developer"
 const maxRetryAfterSecs = 60
 
 type Client struct {
-	R *resty.Client
+	R           *resty.Client
+	tokenSource oauth2.TokenSource
 }
 
 func NewClient(tokenSource oauth2.TokenSource) *Client {
+	c := &Client{tokenSource: tokenSource}
 	r := resty.New().
 		SetBaseURL(baseURL).
 		SetTimeout(30 * time.Second).
@@ -29,12 +31,23 @@ func NewClient(tokenSource oauth2.TokenSource) *Client {
 				return true
 			}
 			code := resp.StatusCode()
+			if code == http.StatusUnauthorized {
+				// Retry once after Token() refresh (Attempt is 1-based before retry).
+				return resp.Request.Attempt <= 1
+			}
 			return code == http.StatusTooManyRequests ||
 				code == http.StatusInternalServerError ||
 				code == http.StatusServiceUnavailable ||
 				code == http.StatusBadGateway
 		}).
 		SetRetryAfter(func(_ *resty.Client, resp *resty.Response) (time.Duration, error) {
+			if resp.StatusCode() == http.StatusUnauthorized {
+				// Force token refresh before retry.
+				if c.tokenSource != nil {
+					_, _ = c.tokenSource.Token()
+				}
+				return 0, nil
+			}
 			if resp.StatusCode() == http.StatusTooManyRequests {
 				if retryAfter := resp.Header().Get("Retry-After"); retryAfter != "" {
 					if secs, err := strconv.Atoi(retryAfter); err == nil {
@@ -42,6 +55,16 @@ func NewClient(tokenSource oauth2.TokenSource) *Client {
 							secs = maxRetryAfterSecs
 						}
 						return time.Duration(secs) * time.Second, nil
+					}
+					if when, err := http.ParseTime(retryAfter); err == nil {
+						d := time.Until(when)
+						if d < 0 {
+							d = 0
+						}
+						if d > time.Duration(maxRetryAfterSecs)*time.Second {
+							d = time.Duration(maxRetryAfterSecs) * time.Second
+						}
+						return d, nil
 					}
 				}
 			}
@@ -55,5 +78,6 @@ func NewClient(tokenSource oauth2.TokenSource) *Client {
 			req.SetAuthToken(tok.AccessToken)
 			return nil
 		})
-	return &Client{R: r}
+	c.R = r
+	return c
 }

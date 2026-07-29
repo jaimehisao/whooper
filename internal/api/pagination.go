@@ -71,9 +71,13 @@ func FetchPaginated[T any](c *Client, endpoint string, params map[string]string,
 		}
 
 		if pr.NextToken == "" || pr.NextToken == nextToken {
+			nextToken = ""
 			break
 		}
 		nextToken = pr.NextToken
+	}
+	if nextToken != "" {
+		return fmt.Errorf("fetch %s: exceeded max pages (%d) with remaining next_token", endpoint, maxPages)
 	}
 	return nil
 }

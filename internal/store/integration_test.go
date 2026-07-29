@@ -120,8 +120,8 @@ func TestDB_SaveRecoveries(t *testing.T) {
 				RecoveryScore:    75,
 				RestingHeartRate: 55,
 				HRVRmssd:         45.5,
-				SpO2Percentage:   98.5,
-				SkinTempCelsius:  33.2,
+				SpO2Percentage: models.FloatPtr(98.5),
+				SkinTempCelsius: models.FloatPtr(33.2),
 			},
 		},
 	}
@@ -211,7 +211,7 @@ func TestDB_SaveWorkouts(t *testing.T) {
 				AverageHeartRate: 145,
 				MaxHeartRate:     185,
 				Kilojoule:        800.0,
-				DistanceMeter:    5000,
+				DistanceMeter: models.FloatPtr(5000),
 			},
 		},
 	}
@@ -350,7 +350,7 @@ func TestDB_Correlations(t *testing.T) {
 		t.Fatalf("SaveRecoveries error = %v", err)
 	}
 
-	points, err := db.GetCorrelationData("recovery", "hrv")
+	points, err := db.GetCorrelationDataSince("recovery", "hrv", 0)
 	if err != nil {
 		t.Fatalf("GetCorrelationData error = %v", err)
 	}

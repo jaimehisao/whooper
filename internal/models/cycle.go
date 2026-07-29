@@ -1,15 +1,16 @@
 package models
 
 type Cycle struct {
-	ID        int     `json:"id"`
-	UserID    int     `json:"user_id"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
-	Start     string  `json:"start"`
-	End       string  `json:"end"`
-	Days      int     `json:"days"`
-	ScoreState string `json:"score_state"`
-	Score     *CycleScore `json:"score"`
+	ID             int         `json:"id"`
+	UserID         int         `json:"user_id"`
+	CreatedAt      string      `json:"created_at"`
+	UpdatedAt      string      `json:"updated_at"`
+	Start          string      `json:"start"`
+	End            string      `json:"end"`
+	TimezoneOffset string      `json:"timezone_offset"`
+	Days           int         `json:"days"`
+	ScoreState     string      `json:"score_state"`
+	Score          *CycleScore `json:"score"`
 }
 
 type CycleScore struct {

@@ -227,11 +227,11 @@ func (m *WorkoutsModel) detailView() string {
 		if hours > 0 {
 			lines = append(lines, fmt.Sprintf("  Load:     %.1f strain/hour", s.Strain/hours))
 		}
-		if s.DistanceMeter > 0 {
-			lines = append(lines, fmt.Sprintf("  Distance: %.1f km", s.DistanceMeter/1000))
+		if s.DistanceOrZero() > 0 {
+			lines = append(lines, fmt.Sprintf("  Distance: %.1f km", s.DistanceOrZero()/1000))
 		}
-		if s.AltitudeGainMeter > 0 {
-			lines = append(lines, fmt.Sprintf("  Elev Gain: %.0f m", s.AltitudeGainMeter))
+		if s.AltitudeGainOrZero() > 0 {
+			lines = append(lines, fmt.Sprintf("  Elev Gain: %.0f m", s.AltitudeGainOrZero()))
 		}
 		if s.ZoneDuration != nil {
 			zd := s.ZoneDuration
@@ -285,8 +285,8 @@ func workoutSummary(workouts []models.Workout) workoutSummaryStats {
 		}
 		stats.totalStrain += w.Score.Strain
 		strainCount++
-		if w.Score.DistanceMeter > 0 {
-			stats.totalDistanceKm += w.Score.DistanceMeter / 1000
+		if w.Score.DistanceOrZero() > 0 {
+			stats.totalDistanceKm += w.Score.DistanceOrZero() / 1000
 		}
 		if w.Score.AverageHeartRate > 0 {
 			hrTotal += float64(w.Score.AverageHeartRate)
@@ -325,8 +325,8 @@ func sportBreakdown(workouts []models.Workout, limit int) string {
 		summary.minutes += workoutDurationMinutes(w)
 		if w.Score != nil {
 			summary.strain += w.Score.Strain
-			if w.Score.DistanceMeter > 0 {
-				summary.distanceKm += w.Score.DistanceMeter / 1000
+			if w.Score.DistanceOrZero() > 0 {
+				summary.distanceKm += w.Score.DistanceOrZero() / 1000
 			}
 		}
 	}

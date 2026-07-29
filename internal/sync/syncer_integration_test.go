@@ -125,7 +125,7 @@ func TestSyncFromUsesOverlapStartForIncrementalSync(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	expected := "2024-01-14T00:00:00Z"
+	expected := "2024-01-01T00:00:00Z"
 	if starts["/v2/cycle"] != expected {
 		t.Fatalf("cycle start query = %q, want %q", starts["/v2/cycle"], expected)
 	}

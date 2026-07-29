@@ -34,7 +34,7 @@ func TestMigrate_UpgradesFromVersionOne(t *testing.T) {
 	}
 	defer db.Close()
 
-	assertSchemaVersion(t, db, 4)
+	assertSchemaVersion(t, db, 5)
 	for _, name := range []string{
 		"idx_recovery_scored_date",
 		"idx_cycle_scored_start",
@@ -52,7 +52,7 @@ func TestMigrate_IdempotentOnReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Open: %v", err)
 	}
-	assertSchemaVersion(t, db, 4)
+	assertSchemaVersion(t, db, 5)
 	if err := db.Close(); err != nil {
 		t.Fatalf("close first DB: %v", err)
 	}
@@ -63,13 +63,13 @@ func TestMigrate_IdempotentOnReopen(t *testing.T) {
 	}
 	defer db.Close()
 
-	assertSchemaVersion(t, db, 4)
+	assertSchemaVersion(t, db, 5)
 	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_version`).Scan(&count); err != nil {
 		t.Fatalf("count schema_version rows: %v", err)
 	}
-	if count != 4 {
-		t.Fatalf("schema_version rows = %d, want 4", count)
+	if count != 5 {
+		t.Fatalf("schema_version rows = %d, want 5", count)
 	}
 }
 

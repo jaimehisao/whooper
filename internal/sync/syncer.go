@@ -29,7 +29,9 @@ func (s *Syncer) progress(entity string, count int) {
 }
 
 // SyncAll performs an incremental sync of all data types.
-// Uses 1-day overlap to catch retroactively updated scores.
+// Uses a 14-day overlap on activity start times. Whoop collection filters use
+// activity start (not updated_at), so the overlap re-fetches recent windows
+// where scores may still be pending or revised.
 func (s *Syncer) SyncAll() error {
 	return s.SyncFrom("")
 }
@@ -49,6 +51,30 @@ func (s *Syncer) SyncFrom(start string) error {
 		start = s.getSyncStart() // incremental
 	}
 
+	if err := s.syncAllEntities(start); err != nil {
+		return err
+	}
+
+	// Re-fetch from earliest PENDING_SCORE activity so late scores outside the
+	// overlap window are still updated.
+	if pendingStart, err := s.db.EarliestPendingActivityStart(); err != nil {
+		return fmt.Errorf("pending score lookup: %w", err)
+	} else if pendingStart != "" && (start == "" || pendingStart < start) {
+		if err := s.syncAllEntities(pendingStart); err != nil {
+			return fmt.Errorf("pending score refresh: %w", err)
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, entity := range syncEntities {
+		if err := s.db.SetSyncState(entity, now); err != nil {
+			return fmt.Errorf("save sync state for %s: %w", entity, err)
+		}
+	}
+	return nil
+}
+
+func (s *Syncer) syncAllEntities(start string) error {
 	type entityErr struct {
 		entity string
 		err    error
@@ -84,13 +110,6 @@ func (s *Syncer) SyncFrom(start string) error {
 		}
 		return fmt.Errorf("%s", msg)
 	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	for _, entity := range []string{"cycles", "recoveries", "sleeps", "workouts"} {
-		if err := s.db.SetSyncState(entity, now); err != nil {
-			return fmt.Errorf("save sync state for %s: %w", entity, err)
-		}
-	}
 	return nil
 }
 
@@ -98,19 +117,35 @@ func (s *Syncer) getSyncStart() string {
 	return GetSyncStartWithOverlap(s.db)
 }
 
+const syncOverlap = 14 * 24 * time.Hour
+
+// GetSyncStartWithOverlap returns the incremental fetch start using the earliest
+// last_synced across entities, minus a 14-day overlap. Whoop's start query
+// parameter filters by activity start time, not updated_at.
 func GetSyncStartWithOverlap(db interface{ GetSyncState(string) (string, error) }) string {
 	if db == nil {
 		return ""
 	}
-	last, err := db.GetSyncState("cycles")
-	if err != nil || last == "" {
+	var earliest time.Time
+	found := false
+	for _, entity := range syncEntities {
+		last, err := db.GetSyncState(entity)
+		if err != nil || last == "" {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, last)
+		if err != nil {
+			continue
+		}
+		if !found || t.Before(earliest) {
+			earliest = t
+			found = true
+		}
+	}
+	if !found {
 		return ""
 	}
-	t, err := time.Parse(time.RFC3339, last)
-	if err != nil {
-		return ""
-	}
-	return t.Add(-24 * time.Hour).Format(time.RFC3339)
+	return earliest.Add(-syncOverlap).Format(time.RFC3339)
 }
 
 func FormatSyncTime(t time.Time) string {

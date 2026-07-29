@@ -103,8 +103,10 @@ func TestHandleOAuthCallbackStateMismatch(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 	}
-	if got := (<-ch).err; got == nil || got.Error() != "state mismatch" {
-		t.Fatalf("unexpected channel error: %v", got)
+	select {
+	case res := <-ch:
+		t.Fatalf("unexpected channel result: %v", res)
+	default:
 	}
 }
 
@@ -121,8 +123,10 @@ func TestHandleOAuthCallbackMissingCode(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 	}
-	if got := (<-ch).err; got == nil || got.Error() != "missing authorization code" {
-		t.Fatalf("unexpected channel error: %v", got)
+	select {
+	case res := <-ch:
+		t.Fatalf("unexpected channel result: %v", res)
+	default:
 	}
 }
 
@@ -201,9 +205,10 @@ func TestHandleOAuthCallbackRepeatedMismatchedState(t *testing.T) {
 	if rr1.Code != http.StatusBadRequest {
 		t.Fatalf("first status = %d, want %d", rr1.Code, http.StatusBadRequest)
 	}
-	res1 := <-ch
-	if res1.err == nil || res1.err.Error() != "state mismatch" {
-		t.Fatalf("first result error = %v, want state mismatch", res1.err)
+	select {
+	case res := <-ch:
+		t.Fatalf("unexpected channel result after mismatch: %v", res)
+	default:
 	}
 
 	// Second callback: mismatched state again
@@ -255,9 +260,10 @@ func TestHandleOAuthCallbackInvalidThenValid(t *testing.T) {
 	if rr1.Code != http.StatusBadRequest {
 		t.Fatalf("first status = %d, want %d", rr1.Code, http.StatusBadRequest)
 	}
-	res1 := <-ch
-	if res1.err == nil || res1.err.Error() != "missing authorization code" {
-		t.Fatalf("first result error = %v, want missing authorization code", res1.err)
+	select {
+	case res := <-ch:
+		t.Fatalf("unexpected channel result after missing code: %v", res)
+	default:
 	}
 
 	// Second callback: valid
@@ -294,7 +300,7 @@ func TestHandleOAuthCallbackMalformedQueries(t *testing.T) {
 			name:       "missing both",
 			query:      "",
 			wantStatus: http.StatusBadRequest,
-			wantErr:    "state mismatch", // It checks state first
+			wantErr:    "", // ignored — does not complete the flow
 		},
 		{
 			name:       "duplicate code",
@@ -330,6 +336,12 @@ func TestHandleOAuthCallbackMalformedQueries(t *testing.T) {
 				res := <-ch
 				if res.err == nil || !strings.Contains(res.err.Error(), tt.wantErr) {
 					t.Fatalf("error = %v, want %s", res.err, tt.wantErr)
+				}
+			} else if tt.wantStatus != http.StatusOK {
+				select {
+				case res := <-ch:
+					t.Fatalf("unexpected channel result: %v", res)
+				default:
 				}
 			}
 		})

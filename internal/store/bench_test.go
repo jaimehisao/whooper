@@ -125,7 +125,7 @@ func BenchmarkGetCorrelationDataRecoveryHRV(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rows, err := db.GetCorrelationData("recovery", "hrv")
+		rows, err := db.GetCorrelationDataSince("recovery", "hrv", 0)
 		if err != nil {
 			b.Fatalf("GetCorrelationData error: %v", err)
 		}
@@ -148,7 +148,7 @@ func BenchmarkGetCorrelationDataRecoveryStrain(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rows, err := db.GetCorrelationData("recovery", "strain")
+		rows, err := db.GetCorrelationDataSince("recovery", "strain", 0)
 		if err != nil {
 			b.Fatalf("GetCorrelationData cross-table error: %v", err)
 		}
@@ -158,17 +158,44 @@ func BenchmarkGetCorrelationDataRecoveryStrain(b *testing.B) {
 	}
 }
 
-func BenchmarkSetAndGetSyncState(b *testing.B) {
+func BenchmarkGetRecoveryTrendDateBounded(b *testing.B) {
 	db := benchDB(b)
+	if err := db.SaveRecoveries(makeRecoveries(5000)); err != nil {
+		b.Fatalf("seed recoveries: %v", err)
+	}
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
-		stamp := fmt.Sprintf("2024-01-01T00:00:%02dZ", i%60)
-		if err := db.SetSyncState("cycles", stamp); err != nil {
-			b.Fatalf("SetSyncState error: %v", err)
+		rows, err := db.GetRecoveryTrend("2024-06-01", "2024-12-31")
+		if err != nil {
+			b.Fatalf("GetRecoveryTrend: %v", err)
 		}
-		if _, err := db.GetSyncState("cycles"); err != nil {
-			b.Fatalf("GetSyncState error: %v", err)
-		}
+		_ = rows
 	}
 }
+
+func BenchmarkListWorkouts(b *testing.B) {
+	db := benchDB(b)
+	workouts := make([]models.Workout, 0, 2000)
+	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 2000; i++ {
+		ts := base.AddDate(0, 0, i%365).Format(time.RFC3339)
+		workouts = append(workouts, models.Workout{
+			ID: fmt.Sprintf("%d", i+1), UserID: 1,
+			CreatedAt: ts, UpdatedAt: ts, Start: ts, End: ts,
+			ScoreState: "SCORED",
+			Score:      &models.WorkoutScore{Strain: float64(i % 20)},
+		})
+	}
+	if err := db.SaveWorkouts(workouts); err != nil {
+		b.Fatalf("seed workouts: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rows, err := db.ListWorkouts("2024-01-01", "2024-12-31")
+		if err != nil {
+			b.Fatalf("ListWorkouts: %v", err)
+		}
+		_ = rows
+	}
+}
+

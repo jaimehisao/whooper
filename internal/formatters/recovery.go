@@ -111,10 +111,10 @@ func sparkline(data []float64, width int) string {
 		rangeVal = 1
 	}
 
-	blocks := " ▁▂▃▄▅▆▇█"
+	blocks := []rune(" ▁▂▃▄▅▆▇█")
 	numBlocks := len(blocks) - 1
 
-	result := make([]byte, 0, width)
+	result := make([]rune, 0, width)
 	for i := 0; i < width; i++ {
 		idx := int(float64(i) * float64(len(data)-1) / float64(width))
 		if idx >= len(data) {

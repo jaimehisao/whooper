@@ -226,7 +226,7 @@ func (m *SleepModel) View() string {
 	if len(m.sleeps) > 0 && m.sleeps[0].Score != nil {
 		s := m.sleeps[0]
 		need := s.Score.SleepNeeded
-		totalNeed := float64(need.BaselineMilli+need.NeedFromSleepDebtMilli+need.NeedFromRecentStrainMilli) / 3600000.0
+		totalNeed := float64(need.BaselineMilli+need.NeedFromSleepDebtMilli+need.NeedFromRecentStrainMilli+need.NeedFromRecentNapMilli) / 3600000.0
 		actual := float64(s.Score.StageSummary.TotalInBedTimeMilli-s.Score.StageSummary.TotalAwakeTimeMilli) / 3600000.0
 		sections = append(sections, fmt.Sprintf("\n%s  Need: %.1fh  Actual: %.1fh",
 			tui.TitleStyle.Render("Sleep Need vs Actual"),
