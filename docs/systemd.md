@@ -37,7 +37,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 Environment=WHOOPER_HOME=/var/lib/whooper
-ExecStart=/usr/local/bin/whooper service --addr 0.0.0.0:9464 --interval 30m
+ExecStart=/usr/local/bin/whooper service --addr 0.0.0.0:9464 --allow-remote --token ${WHOOPER_SERVE_TOKEN} --interval 30m
 Restart=always
 RestartSec=30s
 
@@ -77,7 +77,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 Environment=WHOOPER_HOME=/var/lib/whooper
-ExecStart=/usr/local/bin/whooper serve --addr 0.0.0.0:9464
+ExecStart=/usr/local/bin/whooper serve --addr 0.0.0.0:9464 --allow-remote --token ${WHOOPER_SERVE_TOKEN}
 Restart=always
 RestartSec=30s
 

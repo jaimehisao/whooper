@@ -209,14 +209,14 @@ func TestWriteCSVRecoveries(t *testing.T) {
 				RecoveryScore:    75,
 				HRVRmssd:         45,
 				RestingHeartRate: 55,
-				SpO2Percentage:   98,
-				SkinTempCelsius:  33.2,
+				SpO2Percentage: models.FloatPtr(98),
+				SkinTempCelsius: models.FloatPtr(33.2),
 			},
 		},
 		{CycleID: 2, CreatedAt: "2024-01-16T00:00:00Z"},
 	}
 
-	if err := writeCSV(&buf, "recoveries", data); err != nil {
+	if err := writeCSVData(&buf, "recoveries", data); err != nil {
 		t.Fatalf("writeCSV recoveries error = %v", err)
 	}
 
@@ -240,13 +240,13 @@ func TestWriteCSVWorkouts(t *testing.T) {
 				AverageHeartRate: 140,
 				MaxHeartRate:     180,
 				Kilojoule:        500.5,
-				DistanceMeter:    3210,
+				DistanceMeter: models.FloatPtr(3210),
 			},
 		},
 		{ID: "11", Start: "2024-01-16T10:00:00Z", SportID: 999},
 	}
 
-	if err := writeCSV(&buf, "workouts", data); err != nil {
+	if err := writeCSVData(&buf, "workouts", data); err != nil {
 		t.Fatalf("writeCSV workouts error = %v", err)
 	}
 
@@ -275,7 +275,7 @@ func TestWriteCSVSleeps(t *testing.T) {
 		{ID: "21", Start: "2024-01-16T22:00:00Z", End: "2024-01-17T06:00:00Z"},
 	}
 
-	if err := writeCSV(&buf, "sleeps", data); err != nil {
+	if err := writeCSVData(&buf, "sleeps", data); err != nil {
 		t.Fatalf("writeCSV sleeps error = %v", err)
 	}
 
@@ -304,7 +304,7 @@ func TestWriteCSVCycles(t *testing.T) {
 		{ID: 31, Start: "2024-01-16T00:00:00Z", End: "2024-01-16T06:00:00Z"},
 	}
 
-	if err := writeCSV(&buf, "cycles", data); err != nil {
+	if err := writeCSVData(&buf, "cycles", data); err != nil {
 		t.Fatalf("writeCSV cycles error = %v", err)
 	}
 

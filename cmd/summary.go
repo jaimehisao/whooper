@@ -17,48 +17,97 @@ var summaryCmd = &cobra.Command{
 	Use:     "summary",
 	Aliases: []string{"inspect"},
 	Short:   "Show latest health metrics and sync status",
-	Long:    "Show latest recovery, HRV, sleep debt/gap, strain, latest workout context, and last sync state from the local SQLite cache.",
+	Long:    "Show latest recovery, HRV, sleep debt/gap, strain, latest workout context, and last sync state from the local SQLite cache, or from a remote Whooper backend when remote-url / WHOOPER_REMOTE_URL is set.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		defer func() { summaryJSON = false }()
 
-		db, err := store.Open(config.DBPath())
-		if err != nil {
-			return fmt.Errorf("open database: %w (hint: run 'whooper sync' or 'whooper login' first)", err)
-		}
-		defer db.Close()
-
-		health, err := latestHealthReport(db)
+		backend, remoteOK, err := resolveRemoteBackend()
 		if err != nil {
 			return err
 		}
-
-		syncStates := map[string]string{}
-		for _, entity := range statusEntities() {
-			last, err := db.GetSyncState(entity)
-			if err != nil {
-				continue
-			}
-			if last == "" {
-				last = "never"
-			}
-			syncStates[entity] = last
+		if remoteOK {
+			return runSummaryRemote(cmd, backend)
 		}
-
-		if summaryJSON {
-			return writeSummaryJSON(cmd.OutOrStdout(), health, syncStates)
-		}
-
-		if len(health.Values) == 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "No local health data found.")
-			fmt.Fprintln(cmd.OutOrStdout(), "Hint: Run 'whooper sync' to fetch data from Whoop.")
-			fmt.Fprintln(cmd.OutOrStdout())
-			writeSyncStates(cmd.OutOrStdout(), syncStates)
-			return nil
-		}
-
-		writeSummaryText(cmd.OutOrStdout(), health, syncStates)
-		return nil
+		return runSummaryLocal(cmd)
 	},
+}
+
+func runSummaryLocal(cmd *cobra.Command) error {
+	db, err := store.OpenReadOnly(config.DBPath())
+	if err != nil {
+		return fmt.Errorf("open database: %w (hint: run 'whooper sync' or 'whooper login' first)", err)
+	}
+	defer db.Close()
+
+	health, err := latestHealthReport(db)
+	if err != nil {
+		return err
+	}
+
+	syncStates := map[string]string{}
+	for _, entity := range statusEntities() {
+		last, err := db.GetSyncState(entity)
+		if err != nil {
+			continue
+		}
+		if last == "" {
+			last = "never"
+		}
+		syncStates[entity] = last
+	}
+
+	if summaryJSON {
+		return writeSummaryJSON(cmd.OutOrStdout(), health, syncStates)
+	}
+
+	if len(health.Values) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No local health data found.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Hint: Run 'whooper sync' to fetch data from Whoop.")
+		fmt.Fprintln(cmd.OutOrStdout())
+		writeSyncStates(cmd.OutOrStdout(), syncStates)
+		return nil
+	}
+
+	writeSummaryText(cmd.OutOrStdout(), health, syncStates)
+	return nil
+}
+
+func runSummaryRemote(cmd *cobra.Command, backend remoteBackend) error {
+	var report statusReport
+	if err := backend.Client.GetJSON("/api/summary", nil, &report); err != nil {
+		return formatRemoteError(err)
+	}
+
+	health := report.LatestHealth
+	if health == nil {
+		health = &healthReport{Values: map[string]float64{}, Timestamps: map[string]string{}}
+	}
+	syncStates := map[string]string{}
+	for _, entity := range statusEntities() {
+		last := ""
+		if report.LastSync != nil {
+			last = report.LastSync[entity]
+		}
+		if last == "" {
+			last = "never"
+		}
+		syncStates[entity] = last
+	}
+
+	if summaryJSON {
+		return writeSummaryJSON(cmd.OutOrStdout(), health, syncStates)
+	}
+
+	if len(health.Values) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No remote health data found.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Hint: Run 'whooper sync' on the remote host to fetch data from Whoop.")
+		fmt.Fprintln(cmd.OutOrStdout())
+		writeSyncStates(cmd.OutOrStdout(), syncStates)
+		return nil
+	}
+
+	writeSummaryText(cmd.OutOrStdout(), health, syncStates)
+	return nil
 }
 
 func writeSummaryJSON(out io.Writer, health *healthReport, syncStates map[string]string) error {

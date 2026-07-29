@@ -48,7 +48,7 @@ func defaultDoctorDeps() doctorDeps {
 		loadToken:        auth.LoadToken,
 		tokenPath:        config.TokenPath,
 		openDB: func(path string) (doctorDB, error) {
-			return store.Open(path)
+			return store.OpenReadOnly(path)
 		},
 		dbPath: config.DBPath,
 		apiCheck: func(cfg *config.Config, token *oauth2.Token) error {

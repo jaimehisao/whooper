@@ -9,6 +9,7 @@ A CLI tool that syncs your [Whoop](https://www.whoop.com/) health data via the W
 - **TUI Dashboard** — 5-tab terminal UI with recovery gauge, sleep stage bars, workout table, trend sparklines, and correlation scatter plots
 - **Local SQLite Storage** — Pure-Go SQLite (no CGO), WAL mode, flat schema optimized for analytics
 - **Export** — JSON and CSV export for all data types
+- **Remote CLI client** — Point `summary`, `status`, and `export` at a Whooper `service`/`serve` backend over HTTP
 
 ## Prerequisites
 
@@ -54,9 +55,9 @@ whooper
 | `whooper sync` | Fetch latest data from Whoop API |
 | `whooper sync --debug` | Fetch data with local diagnostic output |
 | `whooper sync --loop --interval 30m` | Keep syncing in the foreground on an interval |
-| `whooper service --addr 0.0.0.0:9464 --interval 30m` | Run combined sync loop and HTTP API server |
-| `whooper config` | Show current configuration |
-| `whooper config set <key> <value>` | Set config (client-id, client-secret, redirect-url) |
+| `whooper service --addr 0.0.0.0:9464 --allow-remote --token $WHOOPER_SERVE_TOKEN --interval 30m` | Run combined sync loop and HTTP API server |
+| `whooper config` | Show current configuration (secrets masked) |
+| `whooper config set <key> <value>` | Set config (client-id, client-secret, redirect-url, remote-url, remote-token) |
 | `whooper alerts` | Show alert configuration (alias: status, show) |
 | `whooper alerts enable` | Enable alerts |
 | `whooper alerts disable` | Disable alerts |
@@ -115,8 +116,8 @@ docker compose up -d
 ```
 
 Grafana is exposed at `http://localhost:3000`. The compose file installs the
-`frser-sqlite-datasource` plugin, mounts `~/.whooper/whooper.db` read-only at
-`/data/whooper.db`, provisions a `Whooper` datasource, and loads dashboards from
+`frser-sqlite-datasource` plugin, mounts `~/.whooper` read-only at
+`/data` (so WAL sidecar files are visible), provisions a `Whooper` datasource, and loads dashboards from
 `grafana/provisioning/dashboards/json`.
 
 The compose stack also includes a `whooper` bridge service. It mounts the same
@@ -163,7 +164,7 @@ and latest cached WHOOP health gauges. Health gauges are exposed as
 For a simple background bridge on a host, run:
 
 ```bash
-whooper service --addr 0.0.0.0:9464 --interval 30m
+whooper service --addr 0.0.0.0:9464 --allow-remote --token "$WHOOPER_SERVE_TOKEN" --interval 30m
 ```
 
 This runs both the periodic sync loop and the HTTP API server in a single
@@ -181,6 +182,35 @@ Example: `/api/sleep?limit=30&from=2024-01-01&to=2024-01-31`.
 
 For systemd deployment examples, see `docs/systemd.md`.
 
+### Remote CLI client
+
+Run sync + API on a server, and use the CLI on a laptop without a local SQLite
+cache. Configure a backend URL (and bearer token when the server requires one):
+
+```bash
+# On the server (after login + sync credentials exist under WHOOPER_HOME):
+export WHOOPER_SERVE_TOKEN='long-random-token'
+whooper service --addr 0.0.0.0:9464 --allow-remote --token "$WHOOPER_SERVE_TOKEN" --interval 30m
+
+# On the client:
+whooper config set remote-url http://whooper-host:9464
+whooper config set remote-token "$WHOOPER_SERVE_TOKEN"
+# Or env (env wins over config file):
+#   export WHOOPER_REMOTE_URL=http://whooper-host:9464
+#   export WHOOPER_REMOTE_TOKEN=...   # or WHOOPER_SERVE_TOKEN
+
+whooper summary --json
+whooper status
+whooper export -e recoveries -f json
+```
+
+When `remote-url` / `WHOOPER_REMOTE_URL` is set, `summary`/`inspect`, `status`,
+and `export` call the remote HTTP API (`/api/summary`, `/status`, `/api/*`) and
+do not require a local `whooper.db`. Unset remote URL to restore local SQLite
+mode. `login`, `sync`, and the TUI remain local (Whoop OAuth + local DB).
+
+Remote failures are explicit: `missing_token`, `unauthorized`, and `unreachable`.
+
 ### Remote Grafana
 
 If Grafana runs on a different machine, prefer one of these setups:
@@ -192,7 +222,7 @@ If Grafana runs on a different machine, prefer one of these setups:
 | Expose a Whooper HTTP API | Best fit for a service-style bridge; available through `whooper serve`. |
 | Use a network database | Better for multi-host deployments than sharing SQLite over NFS. |
 
-The planned service-style bridge is:
+The shipped service-style bridge is:
 
 ```text
 Whoop API -> whooper daemon/API -> Prometheus and/or Grafana HTTP datasource
@@ -552,7 +582,7 @@ WHOOPER_HOME=/var/lib/whooper whooper sync
 
 ### Backup and Restore
 
-- Backup: copy `~/.whooper/config.yaml`, `~/.whooper/token.json`, and `~/.whooper/whooper.db`.
+- Backup: copy `~/.whooper/config.yaml`, `~/.whooper/token.json`, and either checkpoint SQLite (`PRAGMA wal_checkpoint(TRUNCATE)`) then copy `whooper.db`, or copy `whooper.db` together with `whooper.db-wal` / `whooper.db-shm` while the writer is stopped.
 - Restore: place files back in `~/.whooper/` with permissions `0700` on directory and `0600` on files.
 
 ### Security Notes

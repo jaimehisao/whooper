@@ -87,9 +87,12 @@ func TestServiceRunE_StartsServerAndSyncs(t *testing.T) {
 
 	serverStarted := make(chan string, 1)
 	var capturedHandler http.Handler
-	serveListenAndServe = func(addr string, handler http.Handler) error {
+	serveListenAndServe = func(addr string, handler http.Handler, onListening func()) error {
 		capturedHandler = handler
 		serverStarted <- addr
+		if onListening != nil {
+			onListening()
+		}
 		return http.ErrServerClosed
 	}
 
@@ -190,7 +193,10 @@ func TestServiceRunE_SyncErrorDoesNotStopServer(t *testing.T) {
 		return fake
 	}
 
-	serveListenAndServe = func(string, http.Handler) error {
+	serveListenAndServe = func(_ string, _ http.Handler, onListening func()) error {
+		if onListening != nil {
+			onListening()
+		}
 		time.Sleep(10 * time.Millisecond)
 		return http.ErrServerClosed
 	}
@@ -281,7 +287,7 @@ func TestServiceRunE_ServerErrorReturns(t *testing.T) {
 	}
 
 	serverErr := errors.New("bind failed")
-	serveListenAndServe = func(string, http.Handler) error {
+	serveListenAndServe = func(_ string, _ http.Handler, _ func()) error {
 		return serverErr
 	}
 

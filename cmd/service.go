@@ -24,13 +24,20 @@ var serviceCmd = &cobra.Command{
 serves the observability HTTP API from a single process.
 
 This is the recommended way to run Whooper as a background bridge for
-Prometheus and Grafana.`,
+Prometheus and Grafana.
+
+Non-loopback binds require --allow-remote and --token (or WHOOPER_SERVE_TOKEN).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validateSyncSince(serviceSince); err != nil {
 			return err
 		}
 		if serviceInterval <= 0 {
 			return fmt.Errorf("service interval must be greater than zero")
+		}
+
+		token := resolveServeToken()
+		if err := validateServeBind(serviceAddr, serveAllowRemote, token); err != nil {
+			return err
 		}
 
 		// Map service flags to sync globals for runSyncOnce
@@ -42,24 +49,29 @@ Prometheus and Grafana.`,
 			syncFull, syncSince, syncDebug = origFull, origSince, origDebug
 		}()
 
-		handler := newServeHandler(buildServeStatusReport)
+		handler := bearerAuthMiddleware(token, newServeHandler(buildServeStatusReport))
 		errCh := make(chan error, 1)
-		addr := serviceAddr
-		listen := serveListenAndServe
+		ready := make(chan struct{})
 		go func() {
-			if err := listen(addr, handler); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			err := serveListenAndServe(serviceAddr, handler, func() {
+				cmdFprintf(cmd, "Listening on http://%s\n", serviceAddr)
+				close(ready)
+			})
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTP server error: %w", err)
 			}
 		}()
-		// Print from the main goroutine so we do not race with sync progress
-		// writes to the same command stdout (bytes.Buffer in tests).
-		fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", addr)
+
+		select {
+		case <-ready:
+		case err := <-errCh:
+			return err
+		}
 
 		iterations := 0
 		for {
-			// Run sync immediately on startup and then on interval
 			if err := runSyncOnce(cmd); err != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "Sync error: %v\n", err)
+				cmdFprintf(cmd, "Sync error: %v\n", err)
 			}
 
 			iterations++
@@ -67,17 +79,15 @@ Prometheus and Grafana.`,
 				break
 			}
 
-			// Check for server errors before sleeping
 			select {
 			case err := <-errCh:
 				return err
 			default:
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Next sync in %s...\n", serviceInterval)
+			cmdFprintf(cmd, "Next sync in %s...\n", serviceInterval)
 			syncSleep(serviceInterval)
 
-			// Check for server errors after sleeping
 			select {
 			case err := <-errCh:
 				return err
@@ -95,5 +105,7 @@ func init() {
 	serviceCmd.Flags().StringVar(&serviceSince, "since", "", "Sync from a specific date (YYYY-MM-DD)")
 	serviceCmd.Flags().BoolVar(&serviceFull, "full", false, "Perform a full re-sync (ignore incremental state)")
 	serviceCmd.Flags().BoolVar(&serviceDebug, "debug", false, "Print debug diagnostics during sync")
+	serviceCmd.Flags().BoolVar(&serveAllowRemote, "allow-remote", false, "Allow binding to non-loopback addresses")
+	serviceCmd.Flags().StringVar(&serveToken, "token", "", "Bearer token required when --allow-remote (or WHOOPER_SERVE_TOKEN)")
 	rootCmd.AddCommand(serviceCmd)
 }
