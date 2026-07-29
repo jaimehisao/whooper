@@ -7,13 +7,15 @@ on:
     branches: [main]
 
 env:
-  GO_VERSION: "1.24.2"
+  GO_VERSION: "1.25"
 
 jobs:
   # CLI smoke against a host-built binary (no API server process).
   smoke-cli:
     name: smoke-cli
-    runs-on: ubuntu-latest
+    runs-on: apps-runner
+    # Avoid running untrusted fork PR code on self-hosted infrastructure.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
 
@@ -70,7 +72,9 @@ jobs:
   # GHA service containers must pull an image at job start, so we push to GHCR first.
   smoke-image:
     name: smoke-image
-    runs-on: ubuntu-latest
+    runs-on: apps-runner
+    # Avoid running untrusted fork PR code on self-hosted infrastructure.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       packages: write
@@ -104,7 +108,9 @@ jobs:
   smoke-api:
     name: smoke-api
     needs: [smoke-image]
-    runs-on: ubuntu-latest
+    runs-on: apps-runner
+    # Avoid running untrusted fork PR code on self-hosted infrastructure.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       packages: read
