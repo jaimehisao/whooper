@@ -25,8 +25,9 @@ var exportCmd = &cobra.Command{
 	Short: "Export data as JSON or CSV",
 	Long:  "Export data as JSON or CSV from the local SQLite cache, or from a remote Whooper HTTP API when remote-url / WHOOPER_REMOTE_URL is set. Remote export uses /api/recovery, /api/sleep, /api/strain, and /api/workouts view rows.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		from, to, err := exportDateBounds(exportFrom, exportTo)
-		if err != nil {
+		// Validate YYYY-MM-DD flags once; remote /api/* expects date-only query
+		// params, while local List* queries need RFC3339 bounds from DateBounds.
+		if err := validateDateRange(exportFrom, exportTo); err != nil {
 			return err
 		}
 
@@ -35,7 +36,11 @@ var exportCmd = &cobra.Command{
 			return err
 		}
 		if remoteOK {
-			return runExportRemote(cmd, backend, from, to)
+			return runExportRemote(cmd, backend, exportFrom, exportTo)
+		}
+		from, to, err := exportDateBounds(exportFrom, exportTo)
+		if err != nil {
+			return err
 		}
 		return runExportLocal(cmd, from, to)
 	},

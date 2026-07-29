@@ -222,6 +222,79 @@ func TestRemoteExportRecoveriesContainsFixture(t *testing.T) {
 	}
 }
 
+func TestRemoteExportWithDateFilters(t *testing.T) {
+	// Fixture recovery day is 2024-06-01. Remote /api/recovery validates YYYY-MM-DD
+	// only — this would fail if the CLI sent RFC3339 bounds from exportDateBounds.
+	_, _ = startRemoteBackend(t, remoteTestToken)
+
+	prevEntity, prevFormat := exportEntity, exportFormat
+	prevFrom, prevTo, prevOut := exportFrom, exportTo, exportOutput
+	exportEntity = "recoveries"
+	exportFormat = "json"
+	exportFrom = "2024-06-01"
+	exportTo = "2024-06-01"
+	exportOutput = ""
+	t.Cleanup(func() {
+		exportEntity, exportFormat = prevEntity, prevFormat
+		exportFrom, exportTo, exportOutput = prevFrom, prevTo, prevOut
+	})
+
+	var outBuf, errBuf bytes.Buffer
+	exportCmd.SetOut(&outBuf)
+	exportCmd.SetErr(&errBuf)
+	t.Cleanup(func() {
+		exportCmd.SetOut(nil)
+		exportCmd.SetErr(nil)
+	})
+
+	if err := exportCmd.RunE(exportCmd, nil); err != nil {
+		t.Fatalf("export remote with --from/--to: %v\nstdout=%s\nstderr=%s", err, outBuf.String(), errBuf.String())
+	}
+	out := outBuf.String()
+	t.Logf("remote export recoveries --from 2024-06-01 --to 2024-06-01:\n%s", out)
+
+	var rows []map[string]any
+	if err := json.Unmarshal(outBuf.Bytes(), &rows); err != nil {
+		t.Fatalf("parse export json: %v\n%s", err, out)
+	}
+	if len(rows) == 0 {
+		t.Fatalf("expected fixture recovery row for 2024-06-01, got empty: %s", out)
+	}
+	score, ok := rows[0]["recovery_score"]
+	if !ok {
+		t.Fatalf("missing recovery_score in row: %#v", rows[0])
+	}
+	// JSON numbers decode as float64
+	switch v := score.(type) {
+	case float64:
+		if v != 88 {
+			t.Fatalf("recovery_score = %v, want 88", v)
+		}
+	default:
+		t.Fatalf("recovery_score type %T = %v, want 88", score, score)
+	}
+	if day, _ := rows[0]["day"].(string); day != "2024-06-01" {
+		t.Fatalf("day = %q, want 2024-06-01", day)
+	}
+
+	// Outside range must not return the fixture (proves filters are applied).
+	outBuf.Reset()
+	errBuf.Reset()
+	exportFrom = "2024-01-01"
+	exportTo = "2024-01-31"
+	if err := exportCmd.RunE(exportCmd, nil); err != nil {
+		t.Fatalf("export remote outside range: %v", err)
+	}
+	t.Logf("remote export recoveries outside range stdout=%s stderr=%s", outBuf.String(), errBuf.String())
+	var empty []map[string]any
+	if err := json.Unmarshal(outBuf.Bytes(), &empty); err != nil {
+		t.Fatalf("parse empty range: %v\n%s", err, outBuf.String())
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected no rows outside range, got %d: %s", len(empty), outBuf.String())
+	}
+}
+
 func TestRemoteStatusSuccess(t *testing.T) {
 	baseURL, _ := startRemoteBackend(t, remoteTestToken)
 
