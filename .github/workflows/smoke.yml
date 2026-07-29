@@ -2,12 +2,17 @@ name: Smoke Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+env:
+  GO_VERSION: "1.24.2"
 
 jobs:
-  smoke-test:
+  # CLI smoke against a host-built binary (no API server process).
+  smoke-cli:
+    name: smoke-cli
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +20,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.2'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Build
@@ -24,11 +29,11 @@ jobs:
       - name: Run unit tests
         run: make test
 
-      - name: Run smoke tests
+      - name: Run CLI smoke tests
         run: |
           set -euo pipefail
           export WHOOPER_HOME=$(mktemp -d)
-          echo "WHOOPER_HOME=$WHOOPER_HOME" >> $GITHUB_ENV
+          echo "WHOOPER_HOME=$WHOOPER_HOME" >> "$GITHUB_ENV"
 
           echo "Checking version..."
           ./whooper version
@@ -61,46 +66,93 @@ jobs:
           ./whooper export --entity sleeps --format json
           ./whooper export --entity workouts --format json
 
-      - name: Smoke test API server
+  # Build and publish an image for the API service job.
+  # GHA service containers must pull an image at job start, so we push to GHCR first.
+  smoke-image:
+    name: smoke-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name
+        id: image
         run: |
           set -euo pipefail
-          # Use a dynamic port
-          PORT=$(( 10000 + $RANDOM % 10000 ))
-          echo "Using port $PORT"
+          # GHCR requires lowercase repository names.
+          repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${repo}/whooper:ci-${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
-          echo "Starting whooper serve in background..."
-          ./whooper serve --addr 127.0.0.1:$PORT > serve.log 2>&1 &
-          SERVE_PID=$!
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-          # Ensure cleanup on exit
-          trap "kill $SERVE_PID 2>/dev/null || true" EXIT
+      - name: Build and push smoke image
+        run: |
+          set -euo pipefail
+          docker build -t "${{ steps.image.outputs.image }}" .
+          docker push "${{ steps.image.outputs.image }}"
 
-          # Wait for server to start or exit early
-          MAX_RETRIES=15
-          COUNT=0
-          until curl -s http://127.0.0.1:$PORT/healthz > /dev/null || [ $COUNT -eq $MAX_RETRIES ]; do
-            if ! kill -0 $SERVE_PID 2>/dev/null; then
-              echo "Server process died early!"
-              cat serve.log
-              exit 1
+  # Probe HTTP API against a whooper service container (not a background process).
+  smoke-api:
+    name: smoke-api
+    needs: [smoke-image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    services:
+      whooper:
+        image: ${{ needs.smoke-image.outputs.image }}
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 9464:9464
+        options: >-
+          --health-cmd "wget -qO- http://127.0.0.1:9464/healthz || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+          --health-start-period 15s
+    steps:
+      - name: Wait for service health
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9464/healthz >/dev/null; then
+              echo "whooper service is healthy"
+              exit 0
             fi
-            echo "Waiting for server to be ready..."
+            echo "waiting for whooper service ($i)..."
             sleep 1
-            COUNT=$((COUNT + 1))
           done
+          echo "whooper service failed to become healthy"
+          exit 1
 
-          if [ $COUNT -eq $MAX_RETRIES ]; then
-            echo "Server failed to start (timeout)"
-            cat serve.log
-            exit 1
-          fi
+      - name: Probe API endpoints
+        run: |
+          set -euo pipefail
 
-          echo "Testing endpoints..."
-          curl -sf http://127.0.0.1:$PORT/healthz
-          curl -sf http://127.0.0.1:$PORT/status
-          curl -sf http://127.0.0.1:$PORT/api/summary
-          curl -sf http://127.0.0.1:$PORT/metrics
+          echo "GET /healthz"
+          curl -sf http://127.0.0.1:9464/healthz
+          echo
 
-          echo "Stopping server..."
-          kill $SERVE_PID
-          wait $SERVE_PID || true
+          echo "GET /status"
+          curl -sf http://127.0.0.1:9464/status
+          echo
+
+          echo "GET /api/summary"
+          curl -sf http://127.0.0.1:9464/api/summary
+          echo
+
+          echo "GET /metrics"
+          curl -sf http://127.0.0.1:9464/metrics | head -n 20
+          echo
