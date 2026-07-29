@@ -5,6 +5,9 @@ import (
 	"fmt"
 )
 
+// DefaultCorrelationLookbackDays caps correlation queries to recent history.
+const DefaultCorrelationLookbackDays = 365
+
 // RecoveryTrendPoint holds a single day's recovery trend data.
 type RecoveryTrendPoint struct {
 	Date          string
@@ -37,19 +40,26 @@ type CorrelationPoint struct {
 }
 
 func (db *DB) GetRecoveryTrend(from, to string) ([]RecoveryTrendPoint, error) {
-	query := `SELECT date(created_at) AS d, recovery_score, hrv_rmssd, resting_heart_rate
+	fromBound, toBound, err := ExpandRangeBounds(from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	dayExpr := `date(created_at)`
+	query := `SELECT ` + dayExpr + ` AS d,
+		AVG(recovery_score), AVG(hrv_rmssd), AVG(resting_heart_rate)
 		FROM recovery WHERE score_state = 'SCORED'`
 	args := []any{}
 
-	if from != "" {
+	if fromBound != "" {
 		query += ` AND created_at >= ?`
-		args = append(args, from)
+		args = append(args, fromBound)
 	}
-	if to != "" {
+	if toBound != "" {
 		query += ` AND created_at <= ?`
-		args = append(args, to)
+		args = append(args, toBound)
 	}
-	query += ` ORDER BY d`
+	query += ` GROUP BY d ORDER BY d ASC`
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -58,8 +68,7 @@ func (db *DB) GetRecoveryTrend(from, to string) ([]RecoveryTrendPoint, error) {
 	defer rows.Close()
 
 	var points []RecoveryTrendPoint
-	if from != "" && to == "" {
-		// Heuristic: for typical trend views (7-90 days), pre-allocate a bit more than a month
+	if fromBound != "" && toBound == "" {
 		points = make([]RecoveryTrendPoint, 0, 90)
 	}
 
@@ -74,21 +83,27 @@ func (db *DB) GetRecoveryTrend(from, to string) ([]RecoveryTrendPoint, error) {
 }
 
 func (db *DB) GetSleepTrend(from, to string) ([]SleepTrendPoint, error) {
-	query := `SELECT date(start) AS d,
-		total_in_bed_time_milli - total_awake_time_milli AS duration_milli,
-		sleep_efficiency_pct, sleep_performance_pct, sleep_consistency_pct
+	fromBound, toBound, err := ExpandRangeBounds(from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	dayExpr := localDateSQL("start")
+	query := `SELECT ` + dayExpr + ` AS d,
+		AVG(total_in_bed_time_milli - total_awake_time_milli),
+		AVG(sleep_efficiency_pct), AVG(sleep_performance_pct), AVG(sleep_consistency_pct)
 		FROM sleep WHERE nap = 0 AND score_state = 'SCORED'`
 	args := []any{}
 
-	if from != "" {
+	if fromBound != "" {
 		query += ` AND start >= ?`
-		args = append(args, from)
+		args = append(args, fromBound)
 	}
-	if to != "" {
+	if toBound != "" {
 		query += ` AND start <= ?`
-		args = append(args, to)
+		args = append(args, toBound)
 	}
-	query += ` ORDER BY d`
+	query += ` GROUP BY d ORDER BY d ASC`
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -97,34 +112,43 @@ func (db *DB) GetSleepTrend(from, to string) ([]SleepTrendPoint, error) {
 	defer rows.Close()
 
 	var points []SleepTrendPoint
-	if from != "" && to == "" {
+	if fromBound != "" && toBound == "" {
 		points = make([]SleepTrendPoint, 0, 90)
 	}
 
 	for rows.Next() {
 		var p SleepTrendPoint
-		if err := rows.Scan(&p.Date, &p.DurationMilli, &p.EfficiencyPct, &p.PerformancePct, &p.ConsistencyPct); err != nil {
+		var duration float64
+		if err := rows.Scan(&p.Date, &duration, &p.EfficiencyPct, &p.PerformancePct, &p.ConsistencyPct); err != nil {
 			return nil, err
 		}
+		p.DurationMilli = int(duration)
 		points = append(points, p)
 	}
 	return points, rows.Err()
 }
 
 func (db *DB) GetStrainTrend(from, to string) ([]StrainTrendPoint, error) {
-	query := `SELECT date(start) AS d, strain, max_heart_rate, kilojoule
+	fromBound, toBound, err := ExpandRangeBounds(from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	dayExpr := localDateSQL("start")
+	query := `SELECT ` + dayExpr + ` AS d,
+		AVG(strain), AVG(max_heart_rate), AVG(kilojoule)
 		FROM cycle WHERE score_state = 'SCORED'`
 	args := []any{}
 
-	if from != "" {
+	if fromBound != "" {
 		query += ` AND start >= ?`
-		args = append(args, from)
+		args = append(args, fromBound)
 	}
-	if to != "" {
+	if toBound != "" {
 		query += ` AND start <= ?`
-		args = append(args, to)
+		args = append(args, toBound)
 	}
-	query += ` ORDER BY d`
+	query += ` GROUP BY d ORDER BY d ASC`
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -133,21 +157,31 @@ func (db *DB) GetStrainTrend(from, to string) ([]StrainTrendPoint, error) {
 	defer rows.Close()
 
 	var points []StrainTrendPoint
-	if from != "" && to == "" {
+	if fromBound != "" && toBound == "" {
 		points = make([]StrainTrendPoint, 0, 90)
 	}
 
 	for rows.Next() {
 		var p StrainTrendPoint
-		if err := rows.Scan(&p.Date, &p.Strain, &p.MaxHeartRate, &p.Kilojoule); err != nil {
+		var maxHR float64
+		if err := rows.Scan(&p.Date, &p.Strain, &maxHR, &p.Kilojoule); err != nil {
 			return nil, err
 		}
+		p.MaxHeartRate = int(maxHR)
 		points = append(points, p)
 	}
 	return points, rows.Err()
 }
 
 func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, error) {
+	return db.GetCorrelationDataSince(metricX, metricY, DefaultCorrelationLookbackDays)
+}
+
+func (db *DB) GetCorrelationDataSince(metricX, metricY string, sinceDays int) ([]CorrelationPoint, error) {
+	if sinceDays < 0 {
+		sinceDays = DefaultCorrelationLookbackDays
+	}
+
 	colX, tableX, err := metricColumn(metricX)
 	if err != nil {
 		return nil, err
@@ -157,29 +191,47 @@ func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, e
 		return nil, err
 	}
 
+	napX := scoredNapFilter(tableX)
+	napY := scoredNapFilter(tableY)
+	lookbackX, lookbackY := "1=1", "1=1"
+	if sinceDays > 0 {
+		lookbackX = fmt.Sprintf(`date(%s) >= date('now', '-%d days')`, dateColumn(tableX), sinceDays)
+		lookbackY = fmt.Sprintf(`date(%s) >= date('now', '-%d days')`, dateColumn(tableY), sinceDays)
+	}
+
 	var query string
 	if tableX == tableY {
-		query = fmt.Sprintf(`SELECT %s, %s FROM %s WHERE score_state = 'SCORED'`,
-			colX, colY, tableX)
+		dayExpr := correlationDayExpr(tableX)
+		query = fmt.Sprintf(
+			`SELECT x, y FROM (
+				SELECT %s AS d, AVG(%s) AS x, AVG(%s) AS y
+				FROM %s
+				WHERE score_state = 'SCORED'%s AND %s
+				GROUP BY d
+			)`,
+			dayExpr, colX, colY, tableX, napX, lookbackX,
+		)
 	} else {
+		dayX := correlationDayExpr(tableX)
+		dayY := correlationDayExpr(tableY)
 		query = fmt.Sprintf(
 			`WITH a_daily AS (
-				SELECT date(%s) AS d, AVG(%s) AS x
+				SELECT %s AS d, AVG(%s) AS x
 				FROM %s
-				WHERE score_state = 'SCORED'
-				GROUP BY date(%s)
+				WHERE score_state = 'SCORED'%s AND %s
+				GROUP BY d
 			),
 			b_daily AS (
-				SELECT date(%s) AS d, AVG(%s) AS y
+				SELECT %s AS d, AVG(%s) AS y
 				FROM %s
-				WHERE score_state = 'SCORED'
-				GROUP BY date(%s)
+				WHERE score_state = 'SCORED'%s AND %s
+				GROUP BY d
 			)
 			SELECT a_daily.x, b_daily.y
 			FROM a_daily
 			JOIN b_daily ON a_daily.d = b_daily.d`,
-			dateColumn(tableX), colX, tableX, dateColumn(tableX),
-			dateColumn(tableY), colY, tableY, dateColumn(tableY),
+			dayX, colX, tableX, napX, lookbackX,
+			dayY, colY, tableY, napY, lookbackY,
 		)
 	}
 
@@ -189,7 +241,11 @@ func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, e
 	}
 	defer rows.Close()
 
-	points := make([]CorrelationPoint, 0, 365) // Typical 1-year view
+	capHint := DefaultCorrelationLookbackDays
+	if sinceDays > 0 {
+		capHint = sinceDays
+	}
+	points := make([]CorrelationPoint, 0, capHint)
 	for rows.Next() {
 		var p CorrelationPoint
 		if err := rows.Scan(&p.X, &p.Y); err != nil {
@@ -198,6 +254,21 @@ func (db *DB) GetCorrelationData(metricX, metricY string) ([]CorrelationPoint, e
 		points = append(points, p)
 	}
 	return points, rows.Err()
+}
+
+func scoredNapFilter(table string) string {
+	if table == "sleep" {
+		return ` AND nap = 0`
+	}
+	return ""
+}
+
+func correlationDayExpr(table string) string {
+	col := dateColumn(table)
+	if table == "recovery" {
+		return `date(created_at)`
+	}
+	return localDateSQL(col)
 }
 
 func metricColumn(metric string) (column, table string, err error) {
@@ -243,3 +314,27 @@ func (db *DB) SetSyncState(entity, lastSynced string) error {
 		entity, lastSynced)
 	return err
 }
+
+// EarliestPendingActivityStart returns the earliest activity start (or recovery created_at)
+// among rows still in PENDING_SCORE state. Empty string means none pending.
+func (db *DB) EarliestPendingActivityStart() (string, error) {
+	var earliest sql.NullString
+	err := db.QueryRow(`
+		SELECT MIN(ts) FROM (
+			SELECT MIN(start) AS ts FROM cycle WHERE score_state = 'PENDING_SCORE'
+			UNION ALL
+			SELECT MIN(start) FROM sleep WHERE score_state = 'PENDING_SCORE'
+			UNION ALL
+			SELECT MIN(start) FROM workout WHERE score_state = 'PENDING_SCORE'
+			UNION ALL
+			SELECT MIN(created_at) FROM recovery WHERE score_state = 'PENDING_SCORE'
+		)`).Scan(&earliest)
+	if err != nil {
+		return "", err
+	}
+	if !earliest.Valid {
+		return "", nil
+	}
+	return earliest.String, nil
+}
+

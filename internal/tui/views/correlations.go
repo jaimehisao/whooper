@@ -54,7 +54,7 @@ func (m *CorrelationsModel) Refresh() tea.Cmd {
 	return func() tea.Msg {
 		xMetric := metricNames[xIdx]
 		yMetric := metricNames[yIdx]
-		data, err := db.GetCorrelationData(xMetric, yMetric)
+		data, err := db.GetCorrelationDataSince(xMetric, yMetric, store.DefaultCorrelationLookbackDays)
 		if err != nil {
 			return correlationDataMsg{err: err}
 		}

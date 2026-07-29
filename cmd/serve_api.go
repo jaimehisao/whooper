@@ -13,6 +13,11 @@ import (
 const defaultAPILimit = 90
 const maxAPILimit = 1000
 
+// serveOpenDB and serveDBPath are seams so tests can point the real HTTP handlers
+// at a fixture database without racing client-side config.SetTestPaths.
+var serveOpenDB = store.OpenReadOnly
+var serveDBPath = config.DBPath
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
@@ -43,7 +48,7 @@ func apiRowsHandler(view, dateCol, orderCol string) http.HandlerFunc {
 			return
 		}
 
-		db, err := store.OpenReadOnly(config.DBPath())
+		db, err := serveOpenDB(serveDBPath())
 		if err != nil {
 			writeErrorJSON(w, fmt.Sprintf("open database: %v", err), http.StatusServiceUnavailable)
 			return
@@ -56,7 +61,11 @@ func apiRowsHandler(view, dateCol, orderCol string) http.HandlerFunc {
 			writeErrorJSON(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		limit := apiLimit(r)
+		limit, err := apiLimit(r)
+		if err != nil {
+			writeErrorJSON(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		query, args := apiRowsQuery(view, dateCol, orderCol, from, to, limit)
 		rows, err := queryJSONRows(db, query, args...)
@@ -131,17 +140,17 @@ func normalizeSQLValue(value any) any {
 	}
 }
 
-func apiLimit(r *http.Request) int {
+func apiLimit(r *http.Request) (int, error) {
 	raw := r.URL.Query().Get("limit")
 	if raw == "" {
-		return defaultAPILimit
+		return defaultAPILimit, nil
 	}
 	limit, err := strconv.Atoi(raw)
 	if err != nil || limit <= 0 {
-		return defaultAPILimit
+		return 0, fmt.Errorf("invalid limit %q", raw)
 	}
 	if limit > maxAPILimit {
-		return maxAPILimit
+		return maxAPILimit, nil
 	}
-	return limit
+	return limit, nil
 }

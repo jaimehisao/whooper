@@ -184,7 +184,7 @@ func TestCorrelationInvariants(t *testing.T) {
 	}
 
 	t.Run("JoinSameDayScoredDataOnly", func(t *testing.T) {
-		points, err := db.GetCorrelationData("recovery", "strain")
+		points, err := db.GetCorrelationDataSince("recovery", "strain", 0)
 		if err != nil {
 			t.Fatalf("GetCorrelationData: %v", err)
 		}
@@ -206,7 +206,7 @@ func TestCorrelationInvariants(t *testing.T) {
 			t.Fatalf("SaveRecoveries: %v", err)
 		}
 
-		points, err := db.GetCorrelationData("recovery", "strain")
+		points, err := db.GetCorrelationDataSince("recovery", "strain", 0)
 		if err != nil {
 			t.Fatalf("GetCorrelationData: %v", err)
 		}

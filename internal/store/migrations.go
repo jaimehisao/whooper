@@ -1,6 +1,9 @@
 package store
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
 
 // migrationVersion tracks which migrations have been applied.
 // Each migration has a version number and a list of SQL statements.
@@ -307,6 +310,65 @@ var migrations = []migration{
 			WHERE score_state = 'SCORED'`,
 		},
 	},
+	{
+		version: 5,
+		statements: []string{
+			`ALTER TABLE cycle ADD COLUMN timezone_offset TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE sleep ADD COLUMN timezone_offset TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE workout ADD COLUMN timezone_offset TEXT NOT NULL DEFAULT ''`,
+			`DROP VIEW IF EXISTS daily_sleep`,
+			`DROP VIEW IF EXISTS daily_strain`,
+			`DROP VIEW IF EXISTS workout_summary`,
+			`CREATE VIEW IF NOT EXISTS daily_sleep AS
+			SELECT
+				CASE WHEN IFNULL(timezone_offset,'') = '' THEN date(start) ELSE date(datetime(start, timezone_offset)) END AS day,
+				(total_in_bed_time_milli - total_awake_time_milli) / 3600000.0 AS actual_hours,
+				total_in_bed_time_milli / 3600000.0 AS in_bed_hours,
+				total_awake_time_milli / 3600000.0 AS awake_hours,
+				(baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli) / 3600000.0 AS need_hours,
+				((total_in_bed_time_milli - total_awake_time_milli) - (baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli)) / 3600000.0 AS need_gap_hours,
+				sleep_efficiency_pct,
+				sleep_performance_pct,
+				sleep_consistency_pct,
+				disturbance_count,
+				sleep_cycle_count,
+				respiratory_rate
+			FROM sleep
+			WHERE nap = 0 AND score_state = 'SCORED'`,
+			`CREATE VIEW IF NOT EXISTS daily_strain AS
+			SELECT
+				CASE WHEN IFNULL(timezone_offset,'') = '' THEN date(start) ELSE date(datetime(start, timezone_offset)) END AS day,
+				strain,
+				kilojoule,
+				average_heart_rate,
+				max_heart_rate
+			FROM cycle
+			WHERE score_state = 'SCORED'`,
+			`CREATE VIEW IF NOT EXISTS workout_summary AS
+			SELECT
+				id,
+				CASE WHEN IFNULL(timezone_offset,'') = '' THEN date(start) ELSE date(datetime(start, timezone_offset)) END AS day,
+				start,
+				end,
+				sport_id,
+				(strftime('%s', end) - strftime('%s', start)) / 60.0 AS duration_minutes,
+				strain,
+				average_heart_rate,
+				max_heart_rate,
+				kilojoule,
+				percent_recorded,
+				distance_meter / 1000.0 AS distance_km,
+				altitude_gain_meter,
+				zone_zero_milli / 60000.0 AS zone_zero_minutes,
+				zone_one_milli / 60000.0 AS zone_one_minutes,
+				zone_two_milli / 60000.0 AS zone_two_minutes,
+				zone_three_milli / 60000.0 AS zone_three_minutes,
+				zone_four_milli / 60000.0 AS zone_four_minutes,
+				zone_five_milli / 60000.0 AS zone_five_minutes
+			FROM workout
+			WHERE score_state = 'SCORED'`,
+		},
+	},
 }
 
 func (db *DB) migrate() error {
@@ -318,7 +380,12 @@ func (db *DB) migrate() error {
 	}
 
 	currentVersion := 0
-	_ = db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_version`).Scan(&currentVersion)
+	err := db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_version`).Scan(&currentVersion)
+	if err == sql.ErrNoRows {
+		currentVersion = 0
+	} else if err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
 
 	for _, m := range migrations {
 		if m.version <= currentVersion {

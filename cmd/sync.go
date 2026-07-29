@@ -53,6 +53,11 @@ func runSyncCommand(cmd *cobra.Command) error {
 		return err
 	}
 
+	// Sync always talks to Whoop + local SQLite; note when remote client mode is also set.
+	if cfg, err := syncLoadConfig(); err == nil && config.RemoteConfigured(cfg) {
+		cmdFprintf(cmd, "Note: %s\n", remoteLocalOnlyHint("whooper sync"))
+	}
+
 	if !syncLoop {
 		return runSyncOnce(cmd)
 	}
@@ -63,13 +68,13 @@ func runSyncCommand(cmd *cobra.Command) error {
 	iterations := 0
 	for {
 		if err := runSyncOnce(cmd); err != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Sync error: %v\n", err)
+			cmdFprintf(cmd, "Sync error: %v\n", err)
 		}
 		iterations++
 		if syncLoopIterations > 0 && iterations >= syncLoopIterations {
 			return nil
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Next sync in %s...\n", syncInterval)
+		cmdFprintf(cmd, "Next sync in %s...\n", syncInterval)
 		syncSleep(syncInterval)
 	}
 }
@@ -85,10 +90,9 @@ func validateSyncSince(value string) error {
 }
 
 func runSyncOnce(cmd *cobra.Command) error {
-	out := cmd.OutOrStdout()
 	debugf := func(format string, args ...any) {
 		if syncDebug {
-			fmt.Fprintf(out, "[debug] "+format+"\n", args...)
+			cmdFprintf(cmd, "[debug] "+format+"\n", args...)
 		}
 	}
 
@@ -122,19 +126,19 @@ func runSyncOnce(cmd *cobra.Command) error {
 	debugf("database opened db_path=%s", syncDBPath())
 
 	syncer := syncNewSyncer(client, db, func(entity string, count int) {
-		fmt.Fprintf(out, "  %s: %d records\n", entity, count)
+		cmdFprintf(cmd, "  %s: %d records\n", entity, count)
 	})
 
 	start := ""
 	switch {
 	case syncFull:
-		fmt.Fprintln(out, "Performing full re-sync from Whoop...")
+		cmdFprintln(cmd, "Performing full re-sync from Whoop...")
 		start = "full"
 	case syncSince != "":
-		fmt.Fprintf(out, "Syncing data from %s...\n", syncSince)
+		cmdFprintf(cmd, "Syncing data from %s...\n", syncSince)
 		start = syncSince + "T00:00:00.000Z"
 	default:
-		fmt.Fprintln(out, "Syncing data from Whoop...")
+		cmdFprintln(cmd, "Syncing data from Whoop...")
 	}
 	debugf("sync start=%q full=%t since=%q", start, syncFull, syncSince)
 
@@ -145,7 +149,7 @@ func runSyncOnce(cmd *cobra.Command) error {
 		}
 		return fmt.Errorf("sync: %w", err)
 	}
-	fmt.Fprintln(out, "Sync complete!")
+	cmdFprintln(cmd, "Sync complete!")
 
 	// Check alerts
 	alerts := analysis.CheckAlerts(db, cfg)
@@ -153,9 +157,9 @@ func runSyncOnce(cmd *cobra.Command) error {
 	for _, a := range alerts {
 		switch a.Level {
 		case "critical":
-			fmt.Fprintf(out, "  [!] %s\n", a.Message)
+			cmdFprintf(cmd, "  [!] %s\n", a.Message)
 		default:
-			fmt.Fprintf(out, "  [*] %s\n", a.Message)
+			cmdFprintf(cmd, "  [*] %s\n", a.Message)
 		}
 	}
 	return nil
@@ -167,5 +171,6 @@ func init() {
 	syncCmd.Flags().BoolVar(&syncDebug, "debug", false, "Print debug diagnostics during sync")
 	syncCmd.Flags().BoolVar(&syncLoop, "loop", false, "Keep syncing in the foreground on an interval")
 	syncCmd.Flags().DurationVar(&syncInterval, "interval", 30*time.Minute, "Interval for --loop")
+	syncCmd.MarkFlagsMutuallyExclusive("full", "since")
 	rootCmd.AddCommand(syncCmd)
 }

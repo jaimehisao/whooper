@@ -25,6 +25,7 @@ func Open(path string) (*DB, error) {
 		db.Close()
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
 	store := &DB{db}
 	if err := store.migrate(); err != nil {
 		db.Close()
@@ -48,5 +49,6 @@ func OpenReadOnly(path string) (*DB, error) {
 		db.Close()
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
 	return &DB{db}, nil
 }

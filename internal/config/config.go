@@ -11,7 +11,13 @@ type Config struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURL  string `yaml:"redirect_url"`
-	Alerts       Alerts `yaml:"alerts"`
+	// RemoteURL is the base URL of a Whooper serve/service backend (e.g. http://host:9464).
+	// When set (or overridden by WHOOPER_REMOTE_URL), read commands use the remote HTTP API.
+	RemoteURL string `yaml:"remote_url,omitempty"`
+	// RemoteToken is the bearer token for remote API access (masked on config show).
+	// Overridable by WHOOPER_REMOTE_TOKEN or WHOOPER_SERVE_TOKEN.
+	RemoteToken string `yaml:"remote_token,omitempty"`
+	Alerts      Alerts `yaml:"alerts"`
 }
 
 type Alerts struct {

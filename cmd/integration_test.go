@@ -164,7 +164,7 @@ func TestConfigCmd_SetRedirectURL(t *testing.T) {
 		t.Fatalf("Save config: %v", err)
 	}
 
-	_, err := runCmd(t, []string{"config", "set", "redirect-url", "http://custom.example.com/callback"})
+	_, err := runCmd(t, []string{"config", "set", "redirect-url", "http://localhost:8484/callback"})
 	if err != nil {
 		t.Fatalf("config set failed: %v", err)
 	}
@@ -173,8 +173,8 @@ func TestConfigCmd_SetRedirectURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load config: %v", err)
 	}
-	if loaded.RedirectURL != "http://custom.example.com/callback" {
-		t.Errorf("RedirectURL = %s, want http://custom.example.com/callback", loaded.RedirectURL)
+	if loaded.RedirectURL != "http://localhost:8484/callback" {
+		t.Errorf("RedirectURL = %s, want http://localhost:8484/callback", loaded.RedirectURL)
 	}
 }
 

@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 
 	"git.infra.hisao.org/hisao/whooper/internal/store"
@@ -17,22 +17,13 @@ const defaultServeAddr = "127.0.0.1:9464"
 
 var serveAddr = defaultServeAddr
 
-var serveListenAndServe = func(addr string, handler http.Handler) error {
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-	return server.ListenAndServe()
-}
-
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Run a localhost observability HTTP server",
 	Long: `Run a localhost observability HTTP server that provides health, status, metrics, and data APIs.
 
 Available API endpoints:
-  /healthz        - Health check
+  /healthz        - Health check (unauthenticated)
   /status         - Current configuration and sync status
   /metrics        - Prometheus metrics
   /api/summary    - Latest health metrics summary
@@ -41,15 +32,22 @@ Available API endpoints:
   /api/strain     - Daily strain data
   /api/workouts   - Workout summary data
 
+Non-loopback binds require --allow-remote and --token (or WHOOPER_SERVE_TOKEN).
+
 Query parameters for /api endpoints:
   from            - Start date (YYYY-MM-DD)
   to              - End date (YYYY-MM-DD), inclusive
   limit           - Number of records to return (default: 90, max: 1000)
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		handler := newServeHandler(buildServeStatusReport)
-		fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", serveAddr)
-		err := serveListenAndServe(serveAddr, handler)
+		token := resolveServeToken()
+		if err := validateServeBind(serveAddr, serveAllowRemote, token); err != nil {
+			return err
+		}
+		handler := bearerAuthMiddleware(token, newServeHandler(buildServeStatusReport))
+		err := serveListenAndServe(serveAddr, handler, func() {
+			cmdFprintf(cmd, "Listening on http://%s\n", serveAddr)
+		})
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
@@ -59,8 +57,28 @@ Query parameters for /api endpoints:
 
 type statusReporter func() statusReport
 
+var (
+	serveStatusCacheMu  sync.Mutex
+	serveStatusCache    statusReport
+	serveStatusCacheAt  time.Time
+	serveStatusCacheKey string
+	serveStatusCacheTTL = 15 * time.Second
+)
+
 func buildServeStatusReport() statusReport {
-	return buildStatusReportWithOpenDB(store.OpenReadOnly)
+	key := serveDBPath()
+	serveStatusCacheMu.Lock()
+	defer serveStatusCacheMu.Unlock()
+	if serveStatusCacheKey == key && !serveStatusCacheAt.IsZero() && time.Since(serveStatusCacheAt) < serveStatusCacheTTL {
+		return serveStatusCache
+	}
+	report := buildStatusReportWithOpenDB(func(string) (*store.DB, error) {
+		return serveOpenDB(serveDBPath())
+	})
+	serveStatusCache = report
+	serveStatusCacheKey = key
+	serveStatusCacheAt = time.Now()
+	return report
 }
 
 func newServeHandler(reporter statusReporter) http.Handler {
@@ -361,5 +379,7 @@ func healthTimestampSeconds(value string) float64 {
 
 func init() {
 	serveCmd.Flags().StringVar(&serveAddr, "addr", defaultServeAddr, "Address to bind the observability server")
+	serveCmd.Flags().BoolVar(&serveAllowRemote, "allow-remote", false, "Allow binding to non-loopback addresses")
+	serveCmd.Flags().StringVar(&serveToken, "token", "", "Bearer token required when --allow-remote (or WHOOPER_SERVE_TOKEN)")
 	rootCmd.AddCommand(serveCmd)
 }

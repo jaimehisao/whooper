@@ -21,7 +21,10 @@ type WeeklyReport struct {
 
 func GenerateWeeklyReport(db *store.DB, weekStart time.Time) (*WeeklyReport, error) {
 	from := weekStart.Format("2006-01-02")
-	to := weekStart.Add(7 * 24 * time.Hour).Format("2006-01-02")
+	// Inclusive end of the 7-day window (DateBounds expands to end-of-day).
+	to := weekStart.Add(6 * 24 * time.Hour).Format("2006-01-02")
+	// Include overnight sleeps that started the evening before the week.
+	sleepFrom := weekStart.Add(-12 * time.Hour).Format(time.RFC3339)
 
 	report := &WeeklyReport{WeekStart: from}
 
@@ -42,7 +45,7 @@ func GenerateWeeklyReport(db *store.DB, weekStart time.Time) (*WeeklyReport, err
 		report.AvgRHR = sumRHR / n
 	}
 
-	sleeps, err := db.GetSleepTrend(from, to)
+	sleeps, err := db.GetSleepTrend(sleepFrom, to)
 	if err != nil {
 		return nil, fmt.Errorf("sleep trend: %w", err)
 	}
@@ -70,14 +73,16 @@ func GenerateWeeklyReport(db *store.DB, weekStart time.Time) (*WeeklyReport, err
 		return nil, fmt.Errorf("list workouts: %w", err)
 	}
 	report.WorkoutCount = len(workouts)
-	if len(workouts) > 0 {
-		var sumStrain float64
-		for _, w := range workouts {
-			if w.Score != nil {
-				sumStrain += w.Score.Strain
-			}
+	var sumStrain float64
+	var scored int
+	for _, w := range workouts {
+		if w.Score != nil {
+			sumStrain += w.Score.Strain
+			scored++
 		}
-		report.AvgWorkoutStrain = sumStrain / float64(len(workouts))
+	}
+	if scored > 0 {
+		report.AvgWorkoutStrain = sumStrain / float64(scored)
 	}
 
 	return report, nil

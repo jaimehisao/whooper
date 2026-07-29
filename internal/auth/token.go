@@ -2,19 +2,45 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"golang.org/x/oauth2"
 )
 
-// SaveToken writes an OAuth2 token to disk as JSON.
+// SaveToken writes an OAuth2 token to disk as JSON using an atomic rename.
 func SaveToken(path string, token *oauth2.Token) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(token, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	tmp, err := os.CreateTemp(filepath.Dir(path), "token-*.json")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 // LoadToken reads an OAuth2 token from a JSON file on disk.
@@ -33,10 +59,10 @@ func LoadToken(path string) (*oauth2.Token, error) {
 // persistingTokenSource wraps an oauth2.TokenSource and saves refreshed tokens
 // to disk so they survive process restarts.
 type persistingTokenSource struct {
-	path        string
-	src         oauth2.TokenSource
-	mu          sync.Mutex
-	lastAccess  string // tracks last access token to detect refreshes
+	path       string
+	src        oauth2.TokenSource
+	mu         sync.Mutex
+	lastAccess string
 }
 
 // PersistingTokenSource returns a TokenSource that persists refreshed tokens
@@ -54,12 +80,11 @@ func (p *persistingTokenSource) Token() (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	// Only save when the token has actually been refreshed
 	if token.AccessToken != p.lastAccess {
 		p.lastAccess = token.AccessToken
-		// We ignore save errors during refresh - it's better to have a fresh
-		// token in memory than to fail because disk is full or read-only.
-		_ = SaveToken(p.path, token)
+		if err := SaveToken(p.path, token); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to persist refreshed token: %v\n", err)
+		}
 	}
 	return token, nil
 }

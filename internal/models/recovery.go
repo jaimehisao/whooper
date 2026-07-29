@@ -11,10 +11,24 @@ type Recovery struct {
 }
 
 type RecoveryScore struct {
-	UserCalibrating  bool    `json:"user_calibrating"`
-	RecoveryScore    float64 `json:"recovery_score"`
-	RestingHeartRate float64 `json:"resting_heart_rate"`
-	HRVRmssd         float64 `json:"hrv_rmssd_milli"`
-	SpO2Percentage   float64 `json:"spo2_percentage"`
-	SkinTempCelsius  float64 `json:"skin_temp_celsius"`
+	UserCalibrating  bool     `json:"user_calibrating"`
+	RecoveryScore    float64  `json:"recovery_score"`
+	RestingHeartRate float64  `json:"resting_heart_rate"`
+	HRVRmssd         float64  `json:"hrv_rmssd_milli"`
+	SpO2Percentage   *float64 `json:"spo2_percentage"`
+	SkinTempCelsius  *float64 `json:"skin_temp_celsius"`
+}
+
+func (s *RecoveryScore) SpO2OrZero() float64 {
+	if s == nil || s.SpO2Percentage == nil {
+		return 0
+	}
+	return *s.SpO2Percentage
+}
+
+func (s *RecoveryScore) SkinTempOrZero() float64 {
+	if s == nil || s.SkinTempCelsius == nil {
+		return 0
+	}
+	return *s.SkinTempCelsius
 }

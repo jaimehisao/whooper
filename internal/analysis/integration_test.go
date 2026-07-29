@@ -127,7 +127,7 @@ func TestGenerateWeeklyReport(t *testing.T) {
 			Start:      "2024-01-16T09:00:00Z",
 			End:        "2024-01-16T10:00:00Z",
 			SportID:    1,
-			ScoreState: "SCORED",
+			ScoreState: "PENDING_SCORE",
 			Score:      nil,
 		},
 	}); err != nil {
@@ -158,8 +158,8 @@ func TestGenerateWeeklyReport(t *testing.T) {
 	if report.WorkoutCount != 2 {
 		t.Fatalf("WorkoutCount = %d, want 2", report.WorkoutCount)
 	}
-	if report.AvgWorkoutStrain != 4 {
-		t.Fatalf("AvgWorkoutStrain = %v, want 4", report.AvgWorkoutStrain)
+	if report.AvgWorkoutStrain != 8 {
+		t.Fatalf("AvgWorkoutStrain = %v, want 8 (scored workouts only)", report.AvgWorkoutStrain)
 	}
 }
 

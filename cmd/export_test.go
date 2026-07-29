@@ -199,6 +199,28 @@ func TestExportCommandDateFiltering(t *testing.T) {
 	})
 }
 
+func TestWriteCSVMaps(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []map[string]any{
+		{"day": "2024-06-01", "recovery_score": 88.0},
+		{"day": "2024-06-02", "recovery_score": 70.0},
+	}
+	if err := writeCSVMaps(&buf, rows); err != nil {
+		t.Fatalf("writeCSVMaps: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "day") || !strings.Contains(out, "recovery_score") {
+		t.Fatalf("missing headers: %s", out)
+	}
+	if !strings.Contains(out, "2024-06-01") || !strings.Contains(out, "88") {
+		t.Fatalf("missing values: %s", out)
+	}
+	var empty bytes.Buffer
+	if err := writeCSVMaps(&empty, nil); err != nil {
+		t.Fatalf("empty maps: %v", err)
+	}
+}
+
 func TestWriteCSVRecoveries(t *testing.T) {
 	var buf bytes.Buffer
 	data := []models.Recovery{
@@ -209,14 +231,14 @@ func TestWriteCSVRecoveries(t *testing.T) {
 				RecoveryScore:    75,
 				HRVRmssd:         45,
 				RestingHeartRate: 55,
-				SpO2Percentage:   98,
-				SkinTempCelsius:  33.2,
+				SpO2Percentage: models.FloatPtr(98),
+				SkinTempCelsius: models.FloatPtr(33.2),
 			},
 		},
 		{CycleID: 2, CreatedAt: "2024-01-16T00:00:00Z"},
 	}
 
-	if err := writeCSV(&buf, "recoveries", data); err != nil {
+	if err := writeCSVData(&buf, "recoveries", data); err != nil {
 		t.Fatalf("writeCSV recoveries error = %v", err)
 	}
 
@@ -240,13 +262,13 @@ func TestWriteCSVWorkouts(t *testing.T) {
 				AverageHeartRate: 140,
 				MaxHeartRate:     180,
 				Kilojoule:        500.5,
-				DistanceMeter:    3210,
+				DistanceMeter: models.FloatPtr(3210),
 			},
 		},
 		{ID: "11", Start: "2024-01-16T10:00:00Z", SportID: 999},
 	}
 
-	if err := writeCSV(&buf, "workouts", data); err != nil {
+	if err := writeCSVData(&buf, "workouts", data); err != nil {
 		t.Fatalf("writeCSV workouts error = %v", err)
 	}
 
@@ -275,7 +297,7 @@ func TestWriteCSVSleeps(t *testing.T) {
 		{ID: "21", Start: "2024-01-16T22:00:00Z", End: "2024-01-17T06:00:00Z"},
 	}
 
-	if err := writeCSV(&buf, "sleeps", data); err != nil {
+	if err := writeCSVData(&buf, "sleeps", data); err != nil {
 		t.Fatalf("writeCSV sleeps error = %v", err)
 	}
 
@@ -304,7 +326,7 @@ func TestWriteCSVCycles(t *testing.T) {
 		{ID: 31, Start: "2024-01-16T00:00:00Z", End: "2024-01-16T06:00:00Z"},
 	}
 
-	if err := writeCSV(&buf, "cycles", data); err != nil {
+	if err := writeCSVData(&buf, "cycles", data); err != nil {
 		t.Fatalf("writeCSV cycles error = %v", err)
 	}
 

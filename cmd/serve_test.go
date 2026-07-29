@@ -107,7 +107,7 @@ func TestServeAPIEndpoints(t *testing.T) {
 	}
 	if err := db.SaveWorkouts([]models.Workout{{
 		ID: "workout-1", UserID: 1, Start: "2024-01-02T17:00:00Z", End: "2024-01-02T18:00:00Z", SportID: 0, ScoreState: "SCORED",
-		Score: &models.WorkoutScore{Strain: 9.1, AverageHeartRate: 140, MaxHeartRate: 178, DistanceMeter: 5000},
+		Score: &models.WorkoutScore{Strain: 9.1, AverageHeartRate: 140, MaxHeartRate: 178, DistanceMeter: models.FloatPtr(5000)},
 	}}); err != nil {
 		t.Fatalf("SaveWorkouts: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestServeMetricsFromStatusReport(t *testing.T) {
 	}
 	if err := db.SaveWorkouts([]models.Workout{{
 		ID: "workout-1", UserID: 1, Start: "2024-01-02T17:00:00Z", End: "2024-01-02T18:00:00Z", ScoreState: "SCORED",
-		Score: &models.WorkoutScore{Strain: 9.1, AverageHeartRate: 140, MaxHeartRate: 178, DistanceMeter: 5000},
+		Score: &models.WorkoutScore{Strain: 9.1, AverageHeartRate: 140, MaxHeartRate: 178, DistanceMeter: models.FloatPtr(5000)},
 	}}); err != nil {
 		t.Fatalf("SaveWorkouts: %v", err)
 	}
@@ -323,10 +323,13 @@ func TestServeCommandUsesAddrFlag(t *testing.T) {
 	}()
 
 	var gotAddr string
-	serveListenAndServe = func(addr string, handler http.Handler) error {
+	serveListenAndServe = func(addr string, handler http.Handler, onListening func()) error {
 		gotAddr = addr
 		if handler == nil {
 			t.Fatal("serve handler is nil")
+		}
+		if onListening != nil {
+			onListening()
 		}
 		return http.ErrServerClosed
 	}
@@ -458,15 +461,8 @@ func TestServeAPIJSONErrorsAndFilters(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/recovery?limit=invalid", nil)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d", rec.Code)
-		}
-		var rows []map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
-			t.Fatalf("JSON decode error: %v", err)
-		}
-		if len(rows) != 3 {
-			t.Fatalf("got %d rows, want 3", len(rows))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", rec.Code)
 		}
 	})
 }
@@ -478,7 +474,7 @@ func TestServeCommandReturnsListenError(t *testing.T) {
 	}()
 
 	wantErr := errors.New("bind failed")
-	serveListenAndServe = func(string, http.Handler) error {
+	serveListenAndServe = func(_ string, _ http.Handler, _ func()) error {
 		return wantErr
 	}
 	if err := serveCmd.RunE(serveCmd, nil); !errors.Is(err, wantErr) {

@@ -43,9 +43,27 @@ var statusJSON bool
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show local configuration, database, and sync status",
+	Short: "Show configuration, database, and sync status",
+	Long:  "Show local configuration, database, and sync status. When remote-url / WHOOPER_REMOTE_URL is set, fetches /status from the remote Whooper backend instead of opening local SQLite.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		report := buildStatusReport()
+		backend, remoteOK, err := resolveRemoteBackend()
+		if err != nil {
+			return err
+		}
+		var report statusReport
+		if remoteOK {
+			if err := backend.Client.GetJSON("/status", nil, &report); err != nil {
+				return formatRemoteError(err)
+			}
+			// Annotate that this status came from remote (paths are the server's).
+			if statusJSON {
+				return writeStatusJSON(cmd.OutOrStdout(), report)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Remote backend: %s\n", backend.URL)
+			writeStatusText(cmd.OutOrStdout(), report)
+			return nil
+		}
+		report = buildStatusReport()
 		if statusJSON {
 			return writeStatusJSON(cmd.OutOrStdout(), report)
 		}
@@ -55,7 +73,7 @@ var statusCmd = &cobra.Command{
 }
 
 func buildStatusReport() statusReport {
-	return buildStatusReportWithOpenDB(store.Open)
+	return buildStatusReportWithOpenDB(store.OpenReadOnly)
 }
 
 func buildStatusReportWithOpenDB(openDB func(string) (*store.DB, error)) statusReport {

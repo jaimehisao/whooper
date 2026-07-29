@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -30,12 +31,7 @@ type oauthResult struct {
 
 type tokenExchanger func(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error)
 
-// RunOAuthFlow performs the full OAuth2 authorization-code flow with PKCE:
-//  1. Generates a random state parameter and PKCE verifier.
-//  2. Starts a local HTTP server on :8484 to receive the callback.
-//  3. Opens the user's browser to the authorization URL.
-//  4. Waits for the callback, exchanges the code for a token.
-//  5. Shuts down the server and returns the token.
+// RunOAuthFlow performs the full OAuth2 authorization-code flow with PKCE.
 func RunOAuthFlow(oauthCfg *oauth2.Config) (*oauth2.Token, error) {
 	return RunOAuthFlowWithBrowser(oauthCfg, true)
 }
@@ -56,9 +52,13 @@ func RunOAuthFlowWithBrowser(oauthCfg *oauth2.Config, openBrowser bool) (*oauth2
 
 	ch := make(chan oauthResult, 1)
 
+	ln, err := net.Listen("tcp", oauthServerAddr)
+	if err != nil {
+		return nil, fmt.Errorf("listen for OAuth callback: %w", err)
+	}
+
 	mux := http.NewServeMux()
 	srv := &http.Server{
-		Addr:              oauthServerAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -67,14 +67,12 @@ func RunOAuthFlowWithBrowser(oauthCfg *oauth2.Config, openBrowser bool) (*oauth2
 		handleOAuthCallback(w, r, state, verifier, oauthCfg.Exchange, ch)
 	})
 
-	// Start the server in a goroutine.
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			sendOAuthResult(ch, oauthResult{err: fmt.Errorf("callback server: %w", err)})
 		}
 	}()
 
-	// Open the browser to the authorization URL with PKCE.
 	authURL := oauthCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
 	fmt.Printf("Waiting for authorization on http://%s%s...\n", oauthServerAddr, callbackPath)
 	fmt.Printf("Open this URL in your browser:\n%s\n", authURL)
@@ -86,7 +84,6 @@ func RunOAuthFlowWithBrowser(oauthCfg *oauth2.Config, openBrowser bool) (*oauth2
 		fmt.Println("Automatic browser opening disabled.")
 	}
 
-	// Wait for the callback result with a timeout.
 	var res oauthResult
 	select {
 	case res = <-ch:
@@ -94,11 +91,10 @@ func RunOAuthFlowWithBrowser(oauthCfg *oauth2.Config, openBrowser bool) (*oauth2
 		res = oauthResult{err: errors.New("authorization timed out after 5 minutes")}
 	}
 
-	// Shut down the server.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return nil, fmt.Errorf("shutting down callback server: %w", err)
+		fmt.Printf("warning: shutting down callback server: %v\n", err)
 	}
 
 	return res.token, res.err
@@ -110,16 +106,27 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request, state, verifier
 		return
 	}
 
-	if r.URL.Query().Get("state") != state {
+	q := r.URL.Query()
+	if q.Get("state") != state {
 		http.Error(w, "invalid state parameter", http.StatusBadRequest)
-		sendOAuthResult(ch, oauthResult{err: errors.New("state mismatch")})
+		// Do not complete the flow — ignore scanners / bad callbacks.
 		return
 	}
 
-	code := r.URL.Query().Get("code")
+	if errParam := q.Get("error"); errParam != "" {
+		desc := q.Get("error_description")
+		msg := errParam
+		if desc != "" {
+			msg = errParam + ": " + desc
+		}
+		http.Error(w, msg, http.StatusBadRequest)
+		sendOAuthResult(ch, oauthResult{err: errors.New(msg)})
+		return
+	}
+
+	code := q.Get("code")
 	if code == "" {
 		http.Error(w, "missing code parameter", http.StatusBadRequest)
-		sendOAuthResult(ch, oauthResult{err: errors.New("missing authorization code")})
 		return
 	}
 
@@ -179,10 +186,10 @@ func randomState() (string, error) {
 }
 
 func openBrowser(rawURL string) error {
-	if _, err := url.ParseRequestURI(rawURL); err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("invalid URL")
 	}
-
 	var cmd *exec.Cmd
 	switch runtimeGOOS {
 	case "linux":

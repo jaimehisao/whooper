@@ -1,15 +1,16 @@
 package models
 
 type Workout struct {
-	ID         string        `json:"id"`
-	UserID     int           `json:"user_id"`
-	CreatedAt  string        `json:"created_at"`
-	UpdatedAt  string        `json:"updated_at"`
-	Start      string        `json:"start"`
-	End        string        `json:"end"`
-	SportID    int           `json:"sport_id"`
-	ScoreState string        `json:"score_state"`
-	Score      *WorkoutScore `json:"score"`
+	ID             string        `json:"id"`
+	UserID         int           `json:"user_id"`
+	CreatedAt      string        `json:"created_at"`
+	UpdatedAt      string        `json:"updated_at"`
+	Start          string        `json:"start"`
+	End            string        `json:"end"`
+	TimezoneOffset string        `json:"timezone_offset"`
+	SportID        int           `json:"sport_id"`
+	ScoreState     string        `json:"score_state"`
+	Score          *WorkoutScore `json:"score"`
 }
 
 type WorkoutScore struct {
@@ -18,10 +19,31 @@ type WorkoutScore struct {
 	MaxHeartRate        int           `json:"max_heart_rate"`
 	Kilojoule           float64       `json:"kilojoule"`
 	PercentRecorded     float64       `json:"percent_recorded"`
-	DistanceMeter       float64       `json:"distance_meter"`
-	AltitudeGainMeter   float64       `json:"altitude_gain_meter"`
-	AltitudeChangeMeter float64       `json:"altitude_change_meter"`
+	DistanceMeter       *float64      `json:"distance_meter"`
+	AltitudeGainMeter   *float64      `json:"altitude_gain_meter"`
+	AltitudeChangeMeter *float64      `json:"altitude_change_meter"`
 	ZoneDuration        *ZoneDuration `json:"zone_duration"`
+}
+
+func (s *WorkoutScore) DistanceOrZero() float64 {
+	if s == nil || s.DistanceMeter == nil {
+		return 0
+	}
+	return *s.DistanceMeter
+}
+
+func (s *WorkoutScore) AltitudeGainOrZero() float64 {
+	if s == nil || s.AltitudeGainMeter == nil {
+		return 0
+	}
+	return *s.AltitudeGainMeter
+}
+
+func (s *WorkoutScore) AltitudeChangeOrZero() float64 {
+	if s == nil || s.AltitudeChangeMeter == nil {
+		return 0
+	}
+	return *s.AltitudeChangeMeter
 }
 
 type ZoneDuration struct {
@@ -59,3 +81,6 @@ var SportName = map[int]string{
 	126: "Floor Hockey", 127: "Ice Bath", 128: "BMX",
 	230: "Badminton", 231: "Racquetball", 232: "Disc Golf",
 }
+
+// FloatPtr returns a pointer to v for optional JSON numeric fields.
+func FloatPtr(v float64) *float64 { return &v }

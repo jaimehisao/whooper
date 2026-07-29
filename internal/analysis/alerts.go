@@ -14,6 +14,7 @@ type Alert struct {
 }
 
 // CheckAlerts evaluates today's data against configured thresholds.
+// Uses the latest sample for the day (List* is ordered DESC), not a daily average.
 func CheckAlerts(db *store.DB, cfg *config.Config) []Alert {
 	if !cfg.Alerts.Enabled {
 		return nil
@@ -22,14 +23,24 @@ func CheckAlerts(db *store.DB, cfg *config.Config) []Alert {
 	today := time.Now().UTC().Format("2006-01-02")
 
 	var alerts []Alert
-	recoveries, err := db.GetRecoveryTrend(today, "")
-	if err == nil && len(recoveries) > 0 {
-		alerts = append(alerts, evaluateRecoveryAlert(recoveries[0].RecoveryScore, cfg.Alerts.LowRecovery)...)
+	recoveries, err := db.ListRecoveries(today, today)
+	if err == nil {
+		for _, r := range recoveries {
+			if r.Score != nil {
+				alerts = append(alerts, evaluateRecoveryAlert(r.Score.RecoveryScore, cfg.Alerts.LowRecovery)...)
+				break
+			}
+		}
 	}
 
-	strains, err := db.GetStrainTrend(today, "")
-	if err == nil && len(strains) > 0 {
-		alerts = append(alerts, evaluateStrainAlert(strains[0].Strain, cfg.Alerts.HighStrain)...)
+	cycles, err := db.ListCycles(today, today)
+	if err == nil {
+		for _, c := range cycles {
+			if c.Score != nil {
+				alerts = append(alerts, evaluateStrainAlert(c.Score.Strain, cfg.Alerts.HighStrain)...)
+				break
+			}
+		}
 	}
 
 	return alerts

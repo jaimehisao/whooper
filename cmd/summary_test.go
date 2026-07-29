@@ -99,7 +99,7 @@ func TestSummaryPopulated(t *testing.T) {
 			Strain:           12.5,
 			AverageHeartRate: 145,
 			MaxHeartRate:     170,
-			DistanceMeter:    25000,
+			DistanceMeter: models.FloatPtr(25000),
 		},
 	}
 	if err := db.SaveWorkouts([]models.Workout{workout}); err != nil {

@@ -24,3 +24,9 @@ Do not publicly disclose vulnerabilities until a fix is available.
 - Dependency vulnerability scanning (`govulncheck`).
 - Secret scanning (`gitleaks`).
 - Dependency update automation (Dependabot).
+
+## Observability HTTP API
+
+The `serve` / `service` HTTP API exposes local health data. Defaults bind to `127.0.0.1` only.
+
+Binding to a non-loopback address requires `--allow-remote` and a bearer token (`--token` or `WHOOPER_SERVE_TOKEN`). Keep `/healthz` for probes; protect `/api/*`, `/status`, and `/metrics` with the token.

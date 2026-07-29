@@ -145,7 +145,7 @@ func TestGetCorrelationDataAcrossTablesAndErrors(t *testing.T) {
 		t.Fatalf("SaveSleeps error = %v", err)
 	}
 
-	points, err := db.GetCorrelationData("recovery", "sleep_efficiency")
+	points, err := db.GetCorrelationDataSince("recovery", "sleep_efficiency", 0)
 	if err != nil {
 		t.Fatalf("GetCorrelationData cross table error = %v", err)
 	}
@@ -210,7 +210,7 @@ func TestGetCorrelationDataAcrossTablesDailyAggregation(t *testing.T) {
 		t.Fatalf("SaveCycles error = %v", err)
 	}
 
-	points, err := db.GetCorrelationData("recovery", "strain")
+	points, err := db.GetCorrelationDataSince("recovery", "strain", 0)
 	if err != nil {
 		t.Fatalf("GetCorrelationData error = %v", err)
 	}

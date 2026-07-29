@@ -17,7 +17,7 @@ func (db *DB) SaveProfile(p models.Profile) error {
 
 func (db *DB) GetProfile() (models.Profile, error) {
 	var p models.Profile
-	err := db.QueryRow(`SELECT user_id, email, first_name, last_name FROM profile LIMIT 1`).
+	err := db.QueryRow(`SELECT user_id, email, first_name, last_name FROM profile ORDER BY user_id LIMIT 1`).
 		Scan(&p.UserID, &p.Email, &p.FirstName, &p.LastName)
 	if err == sql.ErrNoRows {
 		return p, fmt.Errorf("no profile found")
