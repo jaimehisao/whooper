@@ -9,16 +9,10 @@ on:
 # Build the container image via a remote BuildKit endpoint so the apps-runner
 # does not need a local Docker socket. Images are never pushed from PRs.
 #
-# Required repository secret:
-#   BUILDKIT_ENDPOINT  e.g. tcp://buildkit.example:1234  or  ssh://user@host
-#
-# Optional (TLS auth for remote BuildKit — set if your builder requires them):
-#   BUILDKIT_CA / BUILDKIT_CERT / BUILDKIT_KEY  (PEM contents)
+# BUILDKIT_ENDPOINT is injected on apps-runner (no repo secret required).
 
 env:
   REGISTRY: ghcr.io
-  # Lowercase image name required by GHCR.
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/whooper
 
 jobs:
   build:
@@ -44,28 +38,22 @@ jobs:
           echo "tag_sha=${image}:sha-${{ github.sha }}" >> "$GITHUB_OUTPUT"
           echo "tag_latest=${image}:latest" >> "$GITHUB_OUTPUT"
 
-      - name: Require remote BuildKit endpoint
-        env:
-          BUILDKIT_ENDPOINT: ${{ secrets.BUILDKIT_ENDPOINT }}
+      - name: Resolve remote BuildKit endpoint
+        id: buildkit
         run: |
           set -euo pipefail
+          # Endpoint is injected on the runner (not a repo secret).
           if [ -z "${BUILDKIT_ENDPOINT:-}" ]; then
-            echo "BUILDKIT_ENDPOINT secret is not set."
-            echo "Add a repository secret pointing at a remote BuildKit instance"
-            echo "(e.g. tcp://buildkit-host:1234) so image builds do not need a local docker.sock."
+            echo "BUILDKIT_ENDPOINT is not set in the runner environment"
             exit 1
           fi
+          echo "endpoint=${BUILDKIT_ENDPOINT}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx (remote driver)
         uses: docker/setup-buildx-action@v3
         with:
           driver: remote
-          endpoint: ${{ secrets.BUILDKIT_ENDPOINT }}
-        env:
-          # Optional TLS material for the remote builder node (node index 0).
-          BUILDER_NODE_0_AUTH_TLS_CACERT: ${{ secrets.BUILDKIT_CA }}
-          BUILDER_NODE_0_AUTH_TLS_CERT: ${{ secrets.BUILDKIT_CERT }}
-          BUILDER_NODE_0_AUTH_TLS_KEY: ${{ secrets.BUILDKIT_KEY }}
+          endpoint: ${{ steps.buildkit.outputs.endpoint }}
 
       - name: Log in to GHCR
         # Login only when we will push (never on pull_request).
