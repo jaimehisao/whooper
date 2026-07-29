@@ -10,9 +10,10 @@ env:
   GO_VERSION: "1.25"
 
 jobs:
-  # CLI smoke against a host-built binary (no API server process).
-  smoke-cli:
-    name: smoke-cli
+  # Host binary only — apps-runner has no Docker socket, so we do not use
+  # GHA service containers or docker build for smoke.
+  smoke-test:
+    name: smoke-test
     runs-on: apps-runner
     # Avoid running untrusted fork PR code on self-hosted infrastructure.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -68,97 +69,42 @@ jobs:
           ./whooper export --entity sleeps --format json
           ./whooper export --entity workouts --format json
 
-  # Build and publish an image for the API service job.
-  # GHA service containers must pull an image at job start, so we push to GHCR first.
-  smoke-image:
-    name: smoke-image
-    runs-on: apps-runner
-    # Avoid running untrusted fork PR code on self-hosted infrastructure.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image: ${{ steps.image.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Image name
-        id: image
+      - name: Smoke test API server (host process)
         run: |
           set -euo pipefail
-          # GHCR requires lowercase repository names.
-          repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          echo "image=ghcr.io/${repo}/whooper:ci-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          # apps-runner has no Docker socket; run serve as a normal process.
+          PORT=$(( 10000 + RANDOM % 10000 ))
+          echo "Using port $PORT"
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          ./whooper serve --addr "127.0.0.1:${PORT}" > serve.log 2>&1 &
+          SERVE_PID=$!
+          trap 'kill $SERVE_PID 2>/dev/null || true' EXIT
 
-      - name: Build and push smoke image
-        run: |
-          set -euo pipefail
-          docker build -t "${{ steps.image.outputs.image }}" .
-          docker push "${{ steps.image.outputs.image }}"
-
-  # Probe HTTP API against a whooper service container (not a background process).
-  smoke-api:
-    name: smoke-api
-    needs: [smoke-image]
-    runs-on: apps-runner
-    # Avoid running untrusted fork PR code on self-hosted infrastructure.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      contents: read
-      packages: read
-    services:
-      whooper:
-        image: ${{ needs.smoke-image.outputs.image }}
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        ports:
-          - 9464:9464
-        options: >-
-          --health-cmd "wget -qO- http://127.0.0.1:9464/healthz || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 12
-          --health-start-period 15s
-    steps:
-      - name: Wait for service health
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:9464/healthz >/dev/null; then
-              echo "whooper service is healthy"
-              exit 0
+          MAX_RETRIES=15
+          COUNT=0
+          until curl -sf "http://127.0.0.1:${PORT}/healthz" >/dev/null || [ "$COUNT" -eq "$MAX_RETRIES" ]; do
+            if ! kill -0 "$SERVE_PID" 2>/dev/null; then
+              echo "Server process died early!"
+              cat serve.log
+              exit 1
             fi
-            echo "waiting for whooper service ($i)..."
+            echo "Waiting for server to be ready..."
             sleep 1
+            COUNT=$((COUNT + 1))
           done
-          echo "whooper service failed to become healthy"
-          exit 1
 
-      - name: Probe API endpoints
-        run: |
-          set -euo pipefail
+          if [ "$COUNT" -eq "$MAX_RETRIES" ]; then
+            echo "Server failed to start (timeout)"
+            cat serve.log
+            exit 1
+          fi
 
-          echo "GET /healthz"
-          curl -sf http://127.0.0.1:9464/healthz
-          echo
+          echo "Testing endpoints..."
+          curl -sf "http://127.0.0.1:${PORT}/healthz"
+          curl -sf "http://127.0.0.1:${PORT}/status"
+          curl -sf "http://127.0.0.1:${PORT}/api/summary"
+          curl -sf "http://127.0.0.1:${PORT}/metrics" | head -n 20
 
-          echo "GET /status"
-          curl -sf http://127.0.0.1:9464/status
-          echo
-
-          echo "GET /api/summary"
-          curl -sf http://127.0.0.1:9464/api/summary
-          echo
-
-          echo "GET /metrics"
-          curl -sf http://127.0.0.1:9464/metrics | head -n 20
-          echo
+          echo "Stopping server..."
+          kill "$SERVE_PID"
+          wait "$SERVE_PID" || true
