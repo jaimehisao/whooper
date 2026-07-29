@@ -44,12 +44,18 @@ Prometheus and Grafana.`,
 
 		handler := newServeHandler(buildServeStatusReport)
 		errCh := make(chan error, 1)
+		// Capture locals so the listen goroutine does not race with test teardown
+		// that swaps package-level serveListenAndServe / serviceAddr.
+		addr := serviceAddr
+		listen := serveListenAndServe
 		go func() {
-			fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", serviceAddr)
-			if err := serveListenAndServe(serviceAddr, handler); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := listen(addr, handler); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTP server error: %w", err)
 			}
 		}()
+		// Print from the main goroutine so we do not race with sync progress
+		// writes to the same command stdout (bytes.Buffer in tests).
+		fmt.Fprintf(cmd.OutOrStdout(), "Listening on http://%s\n", addr)
 
 		iterations := 0
 		for {
