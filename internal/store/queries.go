@@ -90,7 +90,7 @@ func (db *DB) GetSleepTrend(from, to string) ([]SleepTrendPoint, error) {
 
 	dayExpr := localDateSQL("start")
 	query := `SELECT ` + dayExpr + ` AS d,
-		AVG(total_in_bed_time_milli - total_awake_time_milli),
+		AVG(total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0)),
 		AVG(sleep_efficiency_pct), AVG(sleep_performance_pct), AVG(sleep_consistency_pct)
 		FROM sleep WHERE nap = 0 AND score_state = 'SCORED'`
 	args := []any{}
@@ -282,7 +282,7 @@ func metricColumn(metric string) (column, table string, err error) {
 	case "strain":
 		return "strain", "cycle", nil
 	case "sleep_duration":
-		return "(total_in_bed_time_milli - total_awake_time_milli)", "sleep", nil
+		return "(total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0))", "sleep", nil
 	case "sleep_efficiency":
 		return "sleep_efficiency_pct", "sleep", nil
 	default:

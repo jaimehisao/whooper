@@ -219,7 +219,7 @@ func addLatestSleepMetrics(db *store.DB, report *healthReport) error {
 	var date string
 	var actualHours, needHours, debtHours, efficiency, performance, consistency float64
 	err := db.QueryRow(`SELECT date(start),
-			(total_in_bed_time_milli - total_awake_time_milli) / 3600000.0,
+			(total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0)) / 3600000.0,
 			(baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli) / 3600000.0,
 			need_from_sleep_debt_milli / 3600000.0,
 			sleep_efficiency_pct,

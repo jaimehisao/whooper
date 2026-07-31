@@ -212,7 +212,7 @@ func (m *SleepModel) View() string {
 			swsStyle.Render(strings.Repeat("█", swsW2)) +
 			remStyle.Render(strings.Repeat("█", remW))
 
-		hours := float64(ss.TotalInBedTimeMilli-ss.TotalAwakeTimeMilli) / 3600000.0
+		hours := float64(ss.TotalInBedTimeMilli-ss.TotalAwakeTimeMilli-ss.TotalNoDataTimeMilli) / 3600000.0
 		sections = append(sections, fmt.Sprintf("  %s  %s  %.1fh",
 			t.Format("Jan 02"), bar, hours))
 	}
@@ -227,7 +227,7 @@ func (m *SleepModel) View() string {
 		s := m.sleeps[0]
 		need := s.Score.SleepNeeded
 		totalNeed := float64(need.BaselineMilli+need.NeedFromSleepDebtMilli+need.NeedFromRecentStrainMilli+need.NeedFromRecentNapMilli) / 3600000.0
-		actual := float64(s.Score.StageSummary.TotalInBedTimeMilli-s.Score.StageSummary.TotalAwakeTimeMilli) / 3600000.0
+		actual := actualSleepHours(s)
 		sections = append(sections, fmt.Sprintf("\n%s  Need: %.1fh  Actual: %.1fh",
 			tui.TitleStyle.Render("Sleep Need vs Actual"),
 			totalNeed, actual))
@@ -329,7 +329,8 @@ func actualSleepHours(s models.Sleep) float64 {
 		return 0
 	}
 	ss := s.Score.StageSummary
-	return float64(ss.TotalInBedTimeMilli-ss.TotalAwakeTimeMilli) / 3600000.0
+	// Exclude WHOOP no-data gaps from "actual sleep" duration.
+	return float64(ss.TotalInBedTimeMilli-ss.TotalAwakeTimeMilli-ss.TotalNoDataTimeMilli) / 3600000.0
 }
 
 func sleepNeedHours(s models.Sleep) float64 {
