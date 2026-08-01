@@ -5,10 +5,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  release:
+    types: [published]
 
-# Build the container image via remote Buildx so the apps-runner does not need
-# a local Docker socket. BUILDKIT_HOST is injected on the runner.
-# Images are never pushed from PRs.
+# Container images via remote Buildx (BUILDKIT_HOST on apps-runner).
+#
+# Tag policy:
+#   PR            — build only, no push
+#   push to main  — :sha-<git-sha>  and  :latest   (rolling / non-prod)
+#   GitHub Release— :vX.Y.Z  and  :X.Y.Z          (immutable prod pins)
+#
+# :latest is only updated from main, never from a release publish.
 
 env:
   REGISTRY: ghcr.io
@@ -34,8 +41,50 @@ jobs:
           repo="$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')"
           image="ghcr.io/${owner}/${repo}"
           echo "image=${image}" >> "$GITHUB_OUTPUT"
-          echo "tag_sha=${image}:sha-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "tag_latest=${image}:latest" >> "$GITHUB_OUTPUT"
+
+          event="${{ github.event_name }}"
+          if [ "$event" = "release" ]; then
+            # Prefer the release tag (v1.2.3). Strip leading v for bare semver tag.
+            raw="${{ github.event.release.tag_name }}"
+            ver="${raw#v}"
+            # Keep a leading v on the primary tag for clarity in prod pins.
+            if [[ "$raw" == v* ]]; then
+              tag_v="${image}:${raw}"
+            else
+              tag_v="${image}:v${ver}"
+            fi
+            tag_bare="${image}:${ver}"
+            {
+              echo "version=${ver}"
+              echo "push=true"
+              echo "tags<<EOF"
+              echo "${tag_v}"
+              echo "${tag_bare}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "Release image tags: ${tag_v} ${tag_bare} (version=${ver})"
+          elif [ "$event" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            short="$(echo '${{ github.sha }}' | cut -c1-12)"
+            {
+              echo "version=dev-${short}"
+              echo "push=true"
+              echo "tags<<EOF"
+              echo "${image}:sha-${{ github.sha }}"
+              echo "${image}:latest"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "Main image tags: sha-${{ github.sha }} latest (version=dev-${short})"
+          else
+            # pull_request (or other): build only
+            {
+              echo "version=dev"
+              echo "push=false"
+              echo "tags<<EOF"
+              echo "${image}:sha-${{ github.sha }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "PR image: build only (no push)"
+          fi
 
       - name: Set up Docker Buildx (remote driver)
         uses: docker/setup-buildx-action@v4
@@ -44,8 +93,7 @@ jobs:
           endpoint: ${{ env.BUILDKIT_HOST }}
 
       - name: Log in to GHCR
-        # Login only when we will push (never on pull_request).
-        if: github.event_name != 'pull_request'
+        if: steps.meta.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -57,11 +105,10 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          # PRs: build only (no registry push). main: push sha + latest tags.
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ steps.meta.outputs.tag_sha }}
-            ${{ steps.meta.outputs.tag_latest }}
+          push: ${{ steps.meta.outputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false

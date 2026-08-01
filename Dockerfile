@@ -4,7 +4,10 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o /out/whooper .
+
+# VERSION is embedded via -ldflags (dev for main/PR builds; vX.Y.Z for releases).
+ARG VERSION=dev
+RUN go build -ldflags "-s -w -X main.version=${VERSION}" -o /out/whooper .
 
 FROM alpine:3.21
 
