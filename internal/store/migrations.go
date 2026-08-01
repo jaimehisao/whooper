@@ -369,6 +369,30 @@ var migrations = []migration{
 			WHERE score_state = 'SCORED'`,
 		},
 	},
+	{
+		// Sleep duration should exclude no-data gaps (WHOOP stage_summary).
+		// Recreate daily_sleep while preserving timezone-aware day expression from v5.
+		version: 6,
+		statements: []string{
+			`DROP VIEW IF EXISTS daily_sleep`,
+			`CREATE VIEW IF NOT EXISTS daily_sleep AS
+			SELECT
+				CASE WHEN IFNULL(timezone_offset,'') = '' THEN date(start) ELSE date(datetime(start, timezone_offset)) END AS day,
+				(total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0)) / 3600000.0 AS actual_hours,
+				total_in_bed_time_milli / 3600000.0 AS in_bed_hours,
+				total_awake_time_milli / 3600000.0 AS awake_hours,
+				(baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli) / 3600000.0 AS need_hours,
+				((total_in_bed_time_milli - total_awake_time_milli - COALESCE(total_no_data_time_milli, 0)) - (baseline_sleep_needed_milli + need_from_sleep_debt_milli + need_from_recent_strain_milli + need_from_recent_nap_milli)) / 3600000.0 AS need_gap_hours,
+				sleep_efficiency_pct,
+				sleep_performance_pct,
+				sleep_consistency_pct,
+				disturbance_count,
+				sleep_cycle_count,
+				respiratory_rate
+			FROM sleep
+			WHERE nap = 0 AND score_state = 'SCORED'`,
+		},
+	},
 }
 
 func (db *DB) migrate() error {
