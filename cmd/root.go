@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -23,6 +24,11 @@ func SetVersion(v string) {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		var ae *agentExitError
+		if errors.As(err, &ae) {
+			// Agent commands already wrote JSON to stdout; avoid duplicating the message.
+			os.Exit(ae.code)
+		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

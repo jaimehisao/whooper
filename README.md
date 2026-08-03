@@ -66,6 +66,45 @@ whooper
 | `whooper doctor --json` | Run machine-readable readiness checks |
 | `whooper status --json` | Show local config, token, database, and sync state |
 | `whooper export -e <entity> -f <format> [--from YYYY-MM-DD] [--to YYYY-MM-DD]` | Export data (entities: cycles, recoveries, sleeps, workouts; formats: json, csv) |
+| `whooper agent …` | **Read-only JSON CLI for agents** (see [Agent CLI](#agent-cli)) |
+
+## Agent CLI
+
+Read-only JSON interface for automation and LLM agents. Always emits **one JSON
+object** on stdout (success or failure). Never runs login, sync, config mutation,
+alerts mutation, serve, or the TUI.
+
+```bash
+whooper agent schema              # command catalog + envelope docs
+whooper agent summary             # latest health + last_sync
+whooper agent status              # config / db / sync status
+whooper agent recovery --from 2024-01-01 --to 2024-01-31 --limit 30
+whooper agent sleep --limit 14
+whooper agent strain
+whooper agent workouts --from 2024-06-01
+whooper agent doctor              # readiness (skips Whoop API by default)
+whooper agent doctor --api        # also check Whoop API (local token required)
+```
+
+Envelope shape:
+
+```json
+{
+  "ok": true,
+  "command": "summary",
+  "source": "local",
+  "generated_at": "2026-08-03T12:00:00Z",
+  "data": { }
+}
+```
+
+On failure, `ok` is false and `error` is `{ "class": "...", "message": "..." }`.
+Classes include `missing_db`, `missing_token`, `unauthorized`, `unreachable`,
+`invalid_args`, `http_error`, `internal`. Exit `0` on success, `1` on app error,
+`2` on invalid args.
+
+Honors **remote** mode (`remote-url` / `WHOOPER_REMOTE_URL`) for data commands,
+same as `summary` / `export`.
 
 ## Troubleshooting
 
