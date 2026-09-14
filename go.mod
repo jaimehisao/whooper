@@ -1,6 +1,6 @@
 module git.infra.hisao.org/hisao/whooper
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -9,7 +9,7 @@ require (
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/prometheus/client_golang v1.24.1
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/oauth2 v0.36.0
+	golang.org/x/oauth2 v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.54.0
 )
